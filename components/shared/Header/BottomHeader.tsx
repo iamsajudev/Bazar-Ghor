@@ -233,7 +233,7 @@ export const BottomHeader = () => {
 
                         {/* Full-Width Mega Menu Dropdown Wrapper */}
                         <div className="absolute left-4 right-4 top-full pt-2.5 opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-50 text-gray-800 dark:text-gray-200">
-                            <div className="bg-white dark:bg-gray-900 border-2 border-gray-300 dark:border-gray-700 shadow-2xl rounded-2xl overflow-hidden flex">
+                            <div className="bg-white dark:bg-gray-200 border-2 border-gray-200 dark:border-gray-200 shadow-2xl rounded-2xl overflow-hidden flex">
 
                                 {/* Left Sidebar: Main Categories List */}
                                 <div className="w-64 shrink-0 border-r-2 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 py-3">

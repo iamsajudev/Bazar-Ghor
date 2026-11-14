@@ -73,6 +73,7 @@ export default function HomePage() {
                     {dummyProducts.map((product) => (
                         <ProductCard
                             key={product.id}
+                            id={product.id} // <--- এই লাইনটি যোগ করুন
                             title={product.title}
                             price={product.price}
                             originalPrice={product.originalPrice}

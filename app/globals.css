@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* Tailwind v4-এ class বেসড ডার্ক মোড এনাবল করার জন্য */
+@custom-variant dark (&:where(.dark, .dark *));
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

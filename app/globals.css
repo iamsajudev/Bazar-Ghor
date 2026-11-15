@@ -3,6 +3,22 @@
 /* Tailwind v4-এ class বেসড ডার্ক মোড এনাবল করার জন্য */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* কাস্টম ফ্লোটিং (Up-Down) অ্যানিমেশন ডিফাইন */
+@theme {
+  --animate-float: float 4s ease-in-out infinite;
+}
+
+/* কীফ্রেমগুলো @theme ব্লকের বাইরে রাখা হলো */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+/* স্ক্রলবার হাইড করার জন্য */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }

@@ -90,7 +90,7 @@ export const CartDrawer = () => {
                       {item.title}
                     </h3>
                     <p className="text-xs font-bold text-green-600 mt-1">
-                      ৳ {item.price}
+                      $ {item.price}
                     </p>
                   </div>
 
@@ -135,7 +135,7 @@ export const CartDrawer = () => {
             <div className="space-y-1.5 mb-3.5">
               <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                 <span>Subtotal</span>
-                <span className="font-medium text-gray-800 dark:text-gray-200">৳ {total}</span>
+                <span className="font-medium text-gray-800 dark:text-gray-200">$ {total}</span>
               </div>
               <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                 <span>Delivery Charge</span>
@@ -144,7 +144,7 @@ export const CartDrawer = () => {
               <div className="pt-2 border-t border-gray-200 dark:border-gray-800 flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-900 dark:text-white">Total</span>
                 <span className="text-base font-bold text-green-700 dark:text-green-500">
-                  ৳ {total}
+                  $ {total}
                 </span>
               </div>
             </div>

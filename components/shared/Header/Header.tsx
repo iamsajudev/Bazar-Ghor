@@ -13,11 +13,11 @@ export const Header = () => {
         const handleScroll = () => {
             const currentScrollY = window.scrollY;
 
-            // স্ক্রল যদি ৫০ এর নিচে হয় অথবা উপরের দিকে স্ক্রল করা হয়
+            // উপরে স্ক্রল করলে দেখাবে
             if (currentScrollY < lastScrollY.current || currentScrollY < 50) {
                 setIsTopVisible(true);
-            } 
-            // স্ক্রল যদি নিচের দিকে হয় এবং ৫০ এর বেশি হয়
+            }
+            // নিচে স্ক্রল করলে হাইড হবে
             else if (currentScrollY > lastScrollY.current && currentScrollY > 50) {
                 setIsTopVisible(false);
             }
@@ -31,20 +31,17 @@ export const Header = () => {
 
     return (
         <>
-            {/* Top ও Center Header এর র‍্যাপার (স্টিকি বা ফিক্সড নয়) */}
-            <header className="w-full bg-white dark:bg-gray-950">
-                <div
-                    className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                        isTopVisible ? "max-h-[200px] opacity-100" : "max-h-0 opacity-0"
+            {/* Top + Center Header: স্ক্রলে ওপরের দিকে স্লাইড হবে */}
+            <div
+                className={`transition-transform duration-300 ease-in-out w-full bg-white dark:bg-gray-950 ${isTopVisible ? "translate-y-0" : "-translate-y-full"
                     }`}
-                >
-                    <TopHeader />
-                    <CenterHeader />
-                </div>
-            </header>
+            >
+                <TopHeader />
+                <CenterHeader />
+            </div>
 
-            {/* BottomHeader সবসময় ব্রাউজারের উপরে ফিক্সড থাকবে */}
-            <div className="sticky top-0 z-50 w-full shadow-md">
+            {/* BottomHeader: সবসময় ব্রাউজারের উপরে ফিক্সড থাকবে */}
+            <div className="sticky top-0 z-50 w-full bg-white dark:bg-gray-950 shadow-md">
                 <BottomHeader />
             </div>
         </>

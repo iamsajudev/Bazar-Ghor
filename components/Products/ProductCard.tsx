@@ -38,7 +38,7 @@ export function ProductCard({ id, title, price, originalPrice, image }: ProductC
         />
         {originalPrice && (
           <span className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
-            ডিসকাউন্ট
+            Discount
           </span>
         )}
       </div>
@@ -51,9 +51,9 @@ export function ProductCard({ id, title, price, originalPrice, image }: ProductC
 
         <div className="mt-auto">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg font-bold text-green-700 dark:text-green-500">৳ {price}</span>
+            <span className="text-lg font-bold text-green-700 dark:text-green-500">$ {price}</span>
             {originalPrice && (
-              <span className="text-sm text-gray-400 line-through">৳ {originalPrice}</span>
+              <span className="text-sm text-gray-400 line-through">$ {originalPrice}</span>
             )}
           </div>
 
@@ -63,7 +63,7 @@ export function ProductCard({ id, title, price, originalPrice, image }: ProductC
             className="w-full flex items-center justify-center gap-2 bg-green-50 dark:bg-gray-800 text-green-700 dark:text-green-400 border border-green-200 dark:border-gray-700 py-2 rounded-md hover:bg-green-700 hover:text-white dark:hover:bg-green-600 dark:hover:text-white transition-colors cursor-pointer"
           >
             <ShoppingCart className="h-4 w-4" />
-            <span className="text-sm font-medium">কার্টে যোগ করুন</span>
+            <span className="text-sm font-medium">Buy Now</span>
           </button>
         </div>
       </div>

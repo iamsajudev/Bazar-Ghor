@@ -16,6 +16,7 @@ interface CartStore {
   updateQuantity: (id: number, quantity: number) => void;
   toggleCart: () => void;
   closeCart: () => void;
+  buyNow: (item: Omit<CartItem, 'quantity'>) => void; // নতুন
 }
 
 export const useCartStore = create<CartStore>((set) => ({
@@ -42,4 +43,17 @@ export const useCartStore = create<CartStore>((set) => ({
   })),
   toggleCart: () => set((state) => ({ isOpen: !state.isOpen })),
   closeCart: () => set({ isOpen: false }),
+  // buyNow ফাংশন: প্রোডাক্ট অ্যাড করে সরাসরি চেকআউটে পাঠাবে
+  buyNow: (item) => set((state) => {
+    const existingItem = state.items.find((i) => i.id === item.id);
+    let updatedItems;
+    if (existingItem) {
+      updatedItems = state.items.map((i) =>
+        i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+      );
+    } else {
+      updatedItems = [...state.items, { ...item, quantity: 1 }];
+    }
+    return { items: updatedItems, isOpen: false }; // চেকআউটে যাওয়ার আগে ড্রয়ার বন্ধ
+  }),
 }));

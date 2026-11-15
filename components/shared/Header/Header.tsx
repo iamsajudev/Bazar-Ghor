@@ -8,21 +8,30 @@ import { BottomHeader } from "./BottomHeader";
 export const Header = () => {
     const [isTopVisible, setIsTopVisible] = useState(true);
     const lastScrollY = useRef(0);
+    const ticking = useRef(false);
 
     useEffect(() => {
         const handleScroll = () => {
-            const currentScrollY = window.scrollY;
+            // ✅ requestAnimationFrame ব্যবহার করে স্ক্রল ইভেন্ট থ্রটল করা
+            if (!ticking.current) {
+                window.requestAnimationFrame(() => {
+                    const currentScrollY = window.scrollY;
+                    const scrollDifference = currentScrollY - lastScrollY.current;
 
-            // ✅ উপরে স্ক্রল করলে বা ১০০ পিক্সেলের নিচে থাকলে দেখাবে
-            if (currentScrollY < lastScrollY.current || currentScrollY < 100) {
-                setIsTopVisible(true);
-            }
-            // ✅ নিচে স্ক্রল করলে এবং ১০০ পিক্সেলের বেশি হলে হাইড হবে
-            else if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
-                setIsTopVisible(false);
-            }
+                    // ✅ ১০ পিক্সেলের বেশি স্ক্রল হলে তবেই স্টেট চেঞ্জ হবে (ঝাঁকুনি রোধে)
+                    if (currentScrollY < 50) {
+                        // একদম উপরে থাকলে সর্বদা দেখাবে
+                        setIsTopVisible(true);
+                    } else if (Math.abs(scrollDifference) > 10) {
+                        // নিচে স্ক্রল হলে হাইড, উপরে স্ক্রল হলে শো
+                        setIsTopVisible(scrollDifference < 0);
+                    }
 
-            lastScrollY.current = currentScrollY;
+                    lastScrollY.current = currentScrollY;
+                    ticking.current = false;
+                });
+                ticking.current = true;
+            }
         };
 
         window.addEventListener("scroll", handleScroll, { passive: true });
@@ -30,24 +39,23 @@ export const Header = () => {
     }, []);
 
     return (
-        <header className="sticky top-0 z-50 w-full bg-white dark:bg-gray-950 shadow-sm">
+        <header className="sticky top-0 z-[999] w-full bg-white dark:bg-gray-950 shadow-sm">
             
-            {/* ১. TopHeader: max-height এবং opacity দিয়ে স্মুথ হাইড/শো */}
-            {/* ✅ max-h-[100px] দেওয়া হলো, কারণ আপনার TopHeader-এর উচ্চতা প্রায় ৫০ পিক্সেল */}
+            {/* ১. TopHeader: max-height দিয়ে হাইড/শো (ঝাঁকুনি ছাড়া) */}
             <div
-                className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                    isTopVisible ? "max-h-[100px] opacity-100" : "max-h-0 opacity-0"
+                className={`transition-all duration-300 ease-in-out overflow-hidden bg-green-700 ${
+                    isTopVisible ? "max-h-[50px] opacity-100" : "max-h-0 opacity-0"
                 }`}
             >
                 <TopHeader />
             </div>
 
-            {/* ২. CenterHeader: সবসময় স্টিকি */}
+            {/* ২. CenterHeader: সবসময় দৃশ্যমান */}
             <div className="w-full bg-white dark:bg-gray-950">
                 <CenterHeader />
             </div>
 
-            {/* ৩. BottomHeader: সবসময় স্টিকি */}
+            {/* ৩. BottomHeader: সবসময় দৃশ্যমান */}
             <div className="w-full bg-green-700">
                 <BottomHeader />
             </div>

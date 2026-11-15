@@ -35,9 +35,9 @@ const ForgotPasswordPage = () => {
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center mb-4">
                         <Link href="/" className="flex items-center shrink-0 group">
-                            <div className="relative h-12 w-40 md:h-14 md:w-48">
+                            <div className="relative h-20 w-40 md:h-24 md:w-48">
                                 <Image
-                                    src="/images/logo-green.png"
+                                    src="/images/logo-main.png"
                                     alt="BazarGhor Logo"
                                     fill
                                     priority

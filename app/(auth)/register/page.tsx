@@ -60,7 +60,7 @@ export default function RegisterPage() {
                         <Link href="/" className="flex items-center shrink-0 group">
                             <div className="relative h-12 w-40 md:h-14 md:w-48">
                                 <Image
-                                    src="/images/logo-green.png"
+                                    src="/images/logo-main.png"
                                     alt="BazarGhor Logo"
                                     fill
                                     priority

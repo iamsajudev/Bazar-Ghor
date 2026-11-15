@@ -34,7 +34,7 @@ export const CenterHeader = () => {
 
     return (
         <header className="bg-white dark:bg-gray-950 sticky top-0 z-40 shadow-xs transition-colors">
-            <div className="container mx-auto px-4 py-2 flex items-center justify-between gap-4">
+            <div className="container mx-auto px-4  flex items-center justify-between gap-4">
 
                 {/* বাম দিকের অংশ: মোবাইল মেনু এবং লোগো একসাথে */}
                 <div className="flex items-center gap-3">
@@ -48,9 +48,9 @@ export const CenterHeader = () => {
 
                     {/* লোগো (এখন একদম বামে ফিক্সড থাকবে) */}
                     <Link href="/" className="flex items-center shrink-0 group">
-                        <div className="relative h-10 w-32 md:h-12 md:w-36">
+                        <div className="relative h-20 w-40 md:h-24 md:w-48">
                             <Image
-                                src="/images/logo-green.png"
+                                src="/images/logo-main.png"
                                 alt="BazarGhor Logo"
                                 fill
                                 priority

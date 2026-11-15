@@ -43,7 +43,7 @@ export default function ContactPage() {
                         </div>
                         <div>
                             <h3 className="font-bold text-gray-800 dark:text-gray-200 mb-1">Address</h3>
-                            <p className="text-sm text-gray-500">Rampura, Dhaka, Bangladesh</p>
+                            <p className="text-sm text-gray-500">213 W Saratoga, St # ABaltimore, MD 21201</p>
                         </div>
                     </div>
 

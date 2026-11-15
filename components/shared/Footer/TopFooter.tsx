@@ -60,9 +60,9 @@ export const TopFooter = () => {
             {/* Column 1: Logo & Contact Info (2 cols) */}
             <div className="lg:col-span-2">
                 <Link href="/" className="flex items-center shrink-0 group mb-4 inline-block">
-                    <div className="relative h-12 w-36">
+                    <div className="relative h-22 w-46">
                         <Image
-                            src="/images/logo-green.png"
+                            src="/images/logo-main.png"
                             alt="BazarGhor Logo"
                             fill
                             priority
@@ -76,7 +76,7 @@ export const TopFooter = () => {
                 <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                     <div className="flex items-start gap-2">
                         <MapPin className="h-4 w-4 mt-0.5 text-gray-400" />
-                        <span>Rampura, Dhaka, Bangladesh</span>
+                        <span>213 W Saratoga, St # A Baltimore, MD 21201</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-gray-400" />

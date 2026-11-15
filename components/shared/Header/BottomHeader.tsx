@@ -79,7 +79,7 @@ export const BottomHeader = () => {
 
     return (
         <nav className="hidden md:block bg-gradient-to-r from-emerald-800 via-green-700 to-emerald-900 text-white text-xs border-b border-green-600/30 shadow-md relative z-30">
-            <div className="container mx-auto px-4 relative flex items-center justify-between py-2 text-sm ">
+            <div className="container mx-auto px-4 relative flex items-center justify-between  text-sm ">
 
                 {/* Left Side */}
                 <div className="flex items-center gap-8">
@@ -87,7 +87,7 @@ export const BottomHeader = () => {
                         <button
                             type="button"
                             onMouseEnter={() => setActiveIndex(0)}
-                            className="cursor-pointer flex items-center gap-2.5 bg-white/15 hover:bg-white/25 border border-white/20 text-white px-4 py-2 rounded-xl transition-all shadow-sm backdrop-blur-md"
+                            className="cursor-pointer flex items-center gap-2.5 bg-white/15 hover:bg-white/25 text-white px-4 py-2.5  transition-all shadow-sm backdrop-blur-md"
                         >
                             <Menu className="h-4 w-4" />
                             <span className="text-xs md:text-sm">All Categories</span>
@@ -277,7 +277,7 @@ export const BottomHeader = () => {
                 </div>
 
                 {/* Right Side */}
-                <div className="hidden xl:flex items-center gap-2 text-xs text-white bg-white/10 px-3.5 py-2 rounded-xl border border-white/20 shadow-xs backdrop-blur-md">
+                <div className="hidden xl:flex items-center gap-2 text-xs text-white bg-white/10 px-3.5 py-3 shadow-xs backdrop-blur-md">
                     <PhoneCall className="h-3.5 w-3.5 text-emerald-300" />
                     <span>Need Help? Call: <strong className="text-white font-extrabold">09612-338833</strong></span>
                 </div>

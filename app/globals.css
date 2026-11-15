@@ -2,6 +2,16 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+body {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+.dark body {
+  background-color: #030712;
+  color: #f9fafb;
+}
+
 /* ১. কার্ডের ভেতরের ফ্লোটিং অ্যানিমেশন (আপনার আগের) */
 @keyframes float {
 

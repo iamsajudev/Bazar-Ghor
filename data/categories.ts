@@ -34,7 +34,7 @@ export const MOCK_CATEGORIES: Category[] = [
         id: 5,
         name: "Nuts & Seeds",
         image: "https://cdn.ghorerbazar.com/category_images/5u39t1774766425.png",
-        link: "/category/nuts",
+        link: "/category/nuts-seeds",
     },
     {
         id: 6,
@@ -82,7 +82,7 @@ export const MOCK_CATEGORIES: Category[] = [
         id: 13,
         name: "Nuts & Seeds",
         image: "https://cdn.ghorerbazar.com/category_images/5u39t1774766425.png",
-        link: "/category/nuts",
+        link: "/category/nuts-seeds",
     },
     {
         id: 14,

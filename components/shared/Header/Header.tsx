@@ -12,18 +12,14 @@ export const Header = () => {
 
     useEffect(() => {
         const handleScroll = () => {
-            // ✅ requestAnimationFrame ব্যবহার করে স্ক্রল ইভেন্ট থ্রটল করা
             if (!ticking.current) {
                 window.requestAnimationFrame(() => {
                     const currentScrollY = window.scrollY;
                     const scrollDifference = currentScrollY - lastScrollY.current;
 
-                    // ✅ ১০ পিক্সেলের বেশি স্ক্রল হলে তবেই স্টেট চেঞ্জ হবে (ঝাঁকুনি রোধে)
                     if (currentScrollY < 50) {
-                        // একদম উপরে থাকলে সর্বদা দেখাবে
                         setIsTopVisible(true);
                     } else if (Math.abs(scrollDifference) > 10) {
-                        // নিচে স্ক্রল হলে হাইড, উপরে স্ক্রল হলে শো
                         setIsTopVisible(scrollDifference < 0);
                     }
 
@@ -39,23 +35,22 @@ export const Header = () => {
     }, []);
 
     return (
-        <header className="sticky top-0 z-[999] w-full bg-white dark:bg-gray-950 shadow-sm">
-            
-            {/* ১. TopHeader: max-height দিয়ে হাইড/শো (ঝাঁকুনি ছাড়া) */}
+        <header className="sticky top-0 z-40 w-full bg-white dark:bg-gray-950 shadow-sm">
+
+            {/* ১. TopHeader */}
             <div
-                className={`transition-all duration-300 ease-in-out overflow-hidden bg-green-700 ${
-                    isTopVisible ? "max-h-[50px] opacity-100" : "max-h-0 opacity-0"
-                }`}
+                className={`transition-all duration-300 ease-in-out overflow-hidden bg-green-700 ${isTopVisible ? "max-h-[50px] opacity-100" : "max-h-0 opacity-0"
+                    }`}
             >
                 <TopHeader />
             </div>
 
-            {/* ২. CenterHeader: সবসময় দৃশ্যমান */}
+            {/* ২. CenterHeader */}
             <div className="w-full bg-white dark:bg-gray-950">
                 <CenterHeader />
             </div>
 
-            {/* ৩. BottomHeader: সবসময় দৃশ্যমান */}
+            {/* ৩. BottomHeader */}
             <div className="w-full bg-green-700">
                 <BottomHeader />
             </div>

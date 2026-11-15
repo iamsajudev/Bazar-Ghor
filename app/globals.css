@@ -2,9 +2,19 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* =========================================
+   গ্লোবাল স্টাইল
+   ========================================= */
+html {
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: #ffffff;
   color: #111827;
+  overscroll-behavior-y: none;
 }
 
 .dark body {
@@ -12,42 +22,36 @@ body {
   color: #f9fafb;
 }
 
-/* ১. কার্ডের ভেতরের ফ্লোটিং অ্যানিমেশন (আপনার আগের) */
+/* =========================================
+   ফ্লোটিং অ্যানিমেশন (কার্ডের জন্য)
+   ========================================= */
 @keyframes float {
-
-  0%,
-  100% {
+  0%, 100% {
     transform: translateY(0);
   }
-
   50% {
     transform: translateY(-20px);
   }
 }
 
-/* ২. লগইন পেজের ব্যাকগ্রাউন্ড শেপ অ্যানিমেশন */
+/* =========================================
+   লগইন পেজের ব্যাকগ্রাউন্ড অ্যানিমেশন
+   ========================================= */
 @keyframes floatUp {
   0% {
     transform: translateY(100vh) scale(0.6) rotate(0deg);
     opacity: 0;
   }
-
   20% {
     opacity: 0.6;
   }
-
   80% {
     opacity: 0.6;
   }
-
   100% {
     transform: translateY(-15vh) scale(1.2) rotate(360deg);
     opacity: 0;
   }
-}
-
-.floating-shape {
-  animation: floatUp 10s infinite linear;
 }
 
 .floating-shape {
@@ -56,6 +60,9 @@ body {
   animation: floatUp 10s infinite linear;
 }
 
+/* =========================================
+   স্ক্রলবার হাইড (নির্দিষ্ট এলিমেন্টের জন্য)
+   ========================================= */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -77,46 +84,36 @@ body {
 
 /* স্ক্রলবারের ট্র্যাক (ব্যাকগ্রাউন্ড) */
 ::-webkit-scrollbar-track {
-  background: #09832e;
-  /* হালকা সবুজ (green-50) */
+  background: #f0fdf4; /* হালকা সবুজ (green-50) */
 }
 
-/* স্ক্রলবারের থাম্ব (যেটি ধরে স্ক্রল করা হয়) */
+/* স্ক্রলবারের থাম্ব */
 ::-webkit-scrollbar-thumb {
-  background: #16a34a;
-  /* সবুজ (green-600) */
+  background: #16a34a; /* সবুজ (green-600) */
   border-radius: 10px;
   border: 2px solid #f0fdf4;
-  /* ট্র্যাকের সাথে মিশে যাওয়ার জন্য বর্ডার */
 }
 
-/* হোভার করলে থাম্বের রঙ পরিবর্তন */
 ::-webkit-scrollbar-thumb:hover {
-  background: #15803d;
-  /* গাঢ় সবুজ (green-700) */
+  background: #15803d; /* গাঢ় সবুজ (green-700) */
 }
 
-/* =========================================
-   ডার্ক মোডের জন্য স্ক্রলবার
-   ========================================= */
+/* ডার্ক মোড স্ক্রলবার */
 .dark ::-webkit-scrollbar-track {
-  background: #111827;
-  /* ডার্ক মোডে গাঢ় ধূসর (gray-900) */
+  background: #111827; /* ডার্ক মোডে গাঢ় ধূসর (gray-900) */
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #22c55e;
-  /* উজ্জ্বল সবুজ (green-500) */
+  background: #22c55e; /* উজ্জ্বল সবুজ (green-500) */
   border: 2px solid #111827;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #4ade80;
-  /* আরও উজ্জ্বল সবুজ (green-400) */
+  background: #4ade80; /* আরও উজ্জ্বল সবুজ (green-400) */
 }
 
 /* =========================================
-   ফায়ারফক্সের জন্য (Firefox)
+   ফায়ারফক্সের জন্য স্ক্রলবার
    ========================================= */
 * {
   scrollbar-width: thin;

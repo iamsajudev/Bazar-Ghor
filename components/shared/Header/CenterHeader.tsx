@@ -16,6 +16,8 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SearchBar } from "./SearchBar";
 import { useCartStore } from "@/store/useCartStore"; // ১. কার্ট স্টোর ইমপোর্ট করুন
+import { useWishlistStore } from "@/store/useWishlistStore";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export const CenterHeader = () => {
     // ২. স্টোর থেকে প্রয়োজনীয় ফাংশন ও ডেটা নিন
@@ -23,6 +25,12 @@ export const CenterHeader = () => {
 
     // ৩. কার্টে মোট কতটি আইটেম আছে তা ক্যালকুলেট করুন
     const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
+
+    const { items: wishlistItems } = useWishlistStore();
+    const { user, isAuthenticated, isHydrated } = useAuthStore();
+
+    const wishlistCount = wishlistItems.length;
+    const showUser = isHydrated && isAuthenticated;
 
     return (
         <header className="bg-white dark:bg-gray-950 sticky top-0 z-40 shadow-xs transition-colors">
@@ -61,39 +69,55 @@ export const CenterHeader = () => {
                 <div className="flex items-center gap-3 md:gap-5 text-gray-700 dark:text-gray-300">
                     <ThemeToggle />
 
-                    <Link
-                        href="/login"
-                        className="flex flex-col items-center gap-0.5 hover:text-green-600 dark:hover:text-green-500 transition-colors group"
-                    >
-                        <div className="p-1 rounded-full group-hover:bg-green-50 dark:group-hover:bg-gray-900 transition-colors">
-                            <User className="h-5 w-5" />
-                        </div>
-                        <span className="text-[10px] md:text-xs font-medium">Account</span>
-                    </Link>
+                    {showUser ? (
+                        <Link
+                            href="/account"
+                            className="flex flex-col items-center gap-0.5 hover:text-green-600 transition-colors group"
+                        >
+                            <div className="p-1 rounded-full bg-green-50 dark:bg-gray-800">
+                                <User className="h-5 w-5 text-green-600" />
+                            </div>
+                            <span className="text-[10px] md:text-xs font-medium truncate max-w-[60px]">
+                                {user?.name.split(" ")[0]}
+                            </span>
+                        </Link>
+                    ) : (
+                        <Link
+                            href="/login"
+                            className="flex flex-col items-center gap-0.5 hover:text-green-600 transition-colors group"
+                        >
+                            <div className="p-1 rounded-full group-hover:bg-green-50 transition-colors">
+                                <User className="h-5 w-5" />
+                            </div>
+                            <span className="text-[10px] md:text-xs font-medium">Sign In</span>
+                        </Link>
+                    )}
 
                     <Link
                         href="/wishlist"
-                        className="hidden sm:flex flex-col items-center gap-0.5 hover:text-green-600 dark:hover:text-green-500 transition-colors group"
+                        className="hidden sm:flex flex-col items-center gap-0.5 hover:text-green-600 transition-colors group"
                     >
-                        <div className="p-1 rounded-full group-hover:bg-green-50 dark:group-hover:bg-gray-900 transition-colors">
+                        <div id="wishlist-icon-target" className="relative p-1 rounded-full group-hover:bg-green-50 transition-colors">
                             <Heart className="h-5 w-5" />
+                            {wishlistCount > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full ring-2 ring-white">
+                                    {wishlistCount}
+                                </span>
+                            )}
                         </div>
                         <span className="text-[10px] md:text-xs font-medium">Wishlist</span>
                     </Link>
 
-                    {/* ৪. কার্ট লিঙ্কের বদলে বাটন ব্যবহার করুন এবং onClick={toggleCart} দিন */}
                     <button
                         onClick={toggleCart}
-                        className="flex flex-col items-center gap-0.5 hover:text-green-600 dark:hover:text-green-500 transition-colors group cursor-pointer"
+                        className="flex flex-col items-center gap-0.5 hover:text-green-600 transition-colors group cursor-pointer"
                     >
-                        <div className="relative p-1 rounded-full group-hover:bg-green-50 dark:group-hover:bg-gray-900 transition-colors">
+                        {/* এখানে id="cart-icon-target" যোগ করুন */}
+                        <div id="cart-icon-target" className="relative p-1 rounded-full group-hover:bg-green-50 transition-colors">
                             <ShoppingCart className="h-5 w-5" />
-                            {/* ডাইনামিক কার্ট কাউন্ট */}
-                            {totalItems > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full ring-2 ring-white dark:ring-gray-950 shadow-xs">
-                                    {totalItems}
-                                </span>
-                            )}
+                            <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-bold h-4 w-4 flex items-center justify-center rounded-full ring-2 ring-white">
+                                {totalItems}
+                            </span>
                         </div>
                         <span className="text-[10px] md:text-xs font-medium">Cart</span>
                     </button>

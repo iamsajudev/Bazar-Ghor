@@ -6,16 +6,13 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
-      {/* উপরে ছোট লোগো */}
-      <Link href="/" className="mb-8 flex items-center gap-2">
+    <div className="relative min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-orange-50 via-white to-green-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 overflow-hidden">
+      <Link href="/" className="mb-8 flex items-center gap-2 z-10">
         <span className="text-3xl font-bold text-green-700 dark:text-green-500">
           Bazar<span className="text-gray-900 dark:text-white">Ghor</span>
         </span>
       </Link>
-      
-      {/* লগইন/রেজিস্টার ফর্মের বক্স */}
-      <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-lg p-8 border border-gray-100 dark:border-gray-800">
+      <div className="w-full flex items-center justify-center">
         {children}
       </div>
     </div>

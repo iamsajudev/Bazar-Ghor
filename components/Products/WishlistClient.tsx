@@ -6,12 +6,33 @@ import { Heart, ShoppingCart, Trash2, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
+interface WishlistItem {
+    id: number;
+    title: string;
+    price: number;
+    image: string;
+    slug?: string;
+    variantId?: number | null;
+}
+
 export function WishlistClient() {
     const { items, removeItem } = useWishlistStore();
     const { addItem, toggleCart } = useCartStore();
 
-    const handleMoveToCart = (item: { id: number; title: string; price: number; image: string }) => {
-        addItem(item);
+    const handleMoveToCart = async (item: WishlistItem) => {
+        const safePrice =
+            typeof item.price === "number" && Number.isFinite(item.price)
+                ? item.price
+                : 0;
+
+        await addItem({
+            id: item.id,
+            title: item.title,
+            price: safePrice,
+            image: item.image,
+            variantId: item.variantId ?? item.id,
+            quantity: 1,
+        });
         removeItem(item.id);
         toggleCart();
     };
@@ -23,7 +44,9 @@ export function WishlistClient() {
                 <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white">
                     My Wishlist
                 </h1>
-                <span className="text-sm text-gray-500">({items.length} items)</span>
+                <span className="text-sm text-gray-500">
+                    ({items.length} items)
+                </span>
             </div>
 
             {items.length === 0 ? (
@@ -46,51 +69,62 @@ export function WishlistClient() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                    {items.map((item) => (
-                        <div
-                            key={item.id}
-                            className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 flex flex-col group hover:shadow-md transition-shadow"
-                        >
-                            <Link
-                                href={`/products/${item.id}`}
-                                className="block relative aspect-square overflow-hidden bg-gray-50 dark:bg-gray-800 rounded-lg mb-3"
-                            >
-                                <Image
-                                    src={item.image}
-                                    alt={item.title}
-                                    fill
-                                    className="object-contain p-3 group-hover:scale-105 transition-transform"
-                                />
-                            </Link>
+                    {(items as WishlistItem[]).map((item) => {
+                        const productHref = `/products/${item.slug || item.id}`;
+                        const displayPrice =
+                            typeof item.price === "number" &&
+                            Number.isFinite(item.price)
+                                ? item.price.toFixed(2)
+                                : "0.00";
 
-                            <Link
-                                href={`/products/${item.id}`}
-                                className="text-sm font-semibold text-gray-800 dark:text-gray-200 line-clamp-2 mb-1 hover:text-green-600"
+                        return (
+                            <div
+                                key={item.id}
+                                className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-4 flex flex-col group hover:shadow-md transition-shadow"
                             >
-                                {item.title}
-                            </Link>
-                            <p className="text-lg font-bold text-[#f76b1c] mb-3">
-                                ${item.price.toFixed(2)}
-                            </p>
+                                <Link
+                                    href={productHref}
+                                    className="block relative aspect-square overflow-hidden bg-gray-50 dark:bg-gray-800 rounded-lg mb-3"
+                                >
+                                    <Image
+                                        src={item.image}
+                                        alt={item.title}
+                                        fill
+                                        className="object-contain p-3 group-hover:scale-105 transition-transform"
+                                    />
+                                </Link>
 
-                            <div className="mt-auto flex gap-2">
-                                <button
-                                    onClick={() => handleMoveToCart(item)}
-                                    className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-xs font-bold transition-colors"
+                                <Link
+                                    href={productHref}
+                                    className="text-sm font-semibold text-gray-800 dark:text-gray-200 line-clamp-2 mb-1 hover:text-green-600"
                                 >
-                                    <ShoppingCart className="h-3.5 w-3.5" />
-                                    Add to Cart
-                                </button>
-                                <button
-                                    onClick={() => removeItem(item.id)}
-                                    className="p-2 text-gray-400 hover:text-red-600 bg-gray-50 dark:bg-gray-800 rounded-lg transition-colors"
-                                    title="Remove"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
+                                    {item.title}
+                                </Link>
+                                <p className="text-lg font-bold text-[#f76b1c] mb-3">
+                                    ${displayPrice}
+                                </p>
+
+                                <div className="mt-auto flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleMoveToCart(item)}
+                                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                    >
+                                        <ShoppingCart className="h-3.5 w-3.5" />
+                                        Add to Cart
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeItem(item.id)}
+                                        className="p-2 text-gray-400 hover:text-red-600 bg-gray-50 dark:bg-gray-800 rounded-lg transition-colors cursor-pointer"
+                                        title="Remove"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>

@@ -40,7 +40,7 @@ interface ProductVariantData {
     thumbnail_url?: string | null;
 }
 
-interface ExtendedProduct extends ApiProduct {
+interface ExtendedProduct extends Omit<ApiProduct, "in_stock"> {
     primary_image?: CategoryImageObject | null;
     variants?: ProductVariantData[] | null;
     effective_price_minor?: number | null;

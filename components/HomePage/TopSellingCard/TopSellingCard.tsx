@@ -16,43 +16,70 @@ interface TopSellingCardProps {
     isBestSelling?: boolean;
     description?: string;
     slug?: string;
+    variantId?: number | null;
 }
 
-export function TopSellingCard({ id, title, price, originalPrice, image, description, isBestSelling = false, slug }: TopSellingCardProps) {
-    const { addItem, toggleCart, buyNow } = useCartStore();
-    const { addItem: addWishlistItem, removeItem: removeWishlistItem, isInWishlist, isHydrated } = useWishlistStore();
+export function TopSellingCard({
+    id,
+    title,
+    price,
+    originalPrice,
+    image,
+    description,
+    isBestSelling = false,
+    slug,
+    variantId,
+}: TopSellingCardProps) {
+    const { addItem, toggleCart } = useCartStore();
+    const {
+        addItem: addWishlistItem,
+        removeItem: removeWishlistItem,
+        isInWishlist,
+        isHydrated,
+    } = useWishlistStore();
     const router = useRouter();
 
     const imageRef = useRef<HTMLDivElement>(null);
-    
-    // ✅ হাইড্রেশন চেক
+
     const [mounted, setMounted] = useState(false);
     useEffect(() => {
         setMounted(true);
     }, []);
 
-    // ✅ isWishlisted স্টোর থেকে
     const isWishlisted = mounted && isHydrated ? isInWishlist(id) : false;
+    const resolvedVariantId = variantId ?? id;
 
-    const handleAddToCart = (e: React.MouseEvent) => {
+    const handleAddToCart = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        // ✅ ফ্লাই অ্যানিমেশন কল
         if (imageRef.current) {
             flyToCart(image, imageRef.current);
         }
-        addItem({ id, title, price, image });
+        await addItem({
+            id,
+            title,
+            price,
+            image,
+            variantId: resolvedVariantId,
+            quantity: 1,
+        });
         setTimeout(() => {
             toggleCart();
         }, 800);
     };
 
-    const handleBuyNow = (e: React.MouseEvent) => {
+    const handleBuyNow = async (e: React.MouseEvent) => {
         e.stopPropagation();
-        buyNow({ id, title, price, image });
+        await addItem({
+            id,
+            title,
+            price,
+            image,
+            variantId: resolvedVariantId,
+            quantity: 1,
+        });
         router.push("/checkout");
     };
 
-    // ✅ Wishlist হ্যান্ডলার
     const handleWishlist = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isWishlisted) {
@@ -77,7 +104,6 @@ export function TopSellingCard({ id, title, price, originalPrice, image, descrip
             onClick={handleCardClick}
             className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07),0_10px_20px_-2px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-gray-800/60 overflow-hidden flex flex-row items-stretch gap-6 p-5 group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 min-h-[220px] sm:min-h-[260px] cursor-pointer"
         >
-
             {/* Best Selling Ribbon */}
             {isBestSelling && (
                 <div className="absolute top-0 right-0 bg-gradient-to-r from-red-500 to-red-600 text-white text-[11px] font-semibold px-3 py-1.5 rounded-bl-xl flex items-center gap-1.5 z-10 shadow-sm tracking-wide">
@@ -86,9 +112,9 @@ export function TopSellingCard({ id, title, price, originalPrice, image, descrip
                 </div>
             )}
 
-            {/* ✅ Product Image Container with Ref and Wishlist Button */}
-            <div 
-                ref={imageRef} 
+            {/* Product Image Container with Ref and Wishlist Button */}
+            <div
+                ref={imageRef}
                 className="relative w-36 h-36 sm:w-48 sm:h-48 shrink-0 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl overflow-hidden flex items-center justify-center p-3 group/img"
             >
                 <img
@@ -97,10 +123,12 @@ export function TopSellingCard({ id, title, price, originalPrice, image, descrip
                     className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out mix-blend-multiply dark:mix-blend-normal"
                 />
 
-                {/* ✅ Wishlist Button (হোভারে দেখা যাবে) */}
+                {/* Wishlist Button */}
                 <button
+                    type="button"
                     onClick={handleWishlist}
-                    className={`absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full shadow-md transition-all z-20 opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0 ${
+                    aria-label="Toggle wishlist"
+                    className={`absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full shadow-md transition-all z-20 opacity-0 group-hover:opacity-100 translate-x-4 group-hover:translate-x-0 cursor-pointer ${
                         isWishlisted
                             ? "bg-red-500 text-white"
                             : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-red-500 hover:text-white"
@@ -118,9 +146,13 @@ export function TopSellingCard({ id, title, price, originalPrice, image, descrip
                     </h3>
 
                     <div className="flex items-baseline gap-2 mb-2">
-                        <span className="text-xl sm:text-2xl font-black text-[#f76b1c] tracking-tight">${price}</span>
+                        <span className="text-xl sm:text-2xl font-black text-[#f76b1c] tracking-tight">
+                            ${price}
+                        </span>
                         {originalPrice && (
-                            <span className="text-xs sm:text-sm text-gray-400 line-through font-medium">${originalPrice}</span>
+                            <span className="text-xs sm:text-sm text-gray-400 line-through font-medium">
+                                ${originalPrice}
+                            </span>
                         )}
                     </div>
 
@@ -140,6 +172,7 @@ export function TopSellingCard({ id, title, price, originalPrice, image, descrip
 
                 <div className="flex items-center gap-2 mt-auto pt-2">
                     <button
+                        type="button"
                         onClick={handleAddToCart}
                         className="flex items-center justify-center gap-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 py-1.5 px-3 rounded-md hover:border-[#f76b1c] hover:text-[#f76b1c] dark:hover:border-[#f76b1c] dark:hover:text-[#f76b1c] transition-all text-[11px] sm:text-xs font-semibold cursor-pointer shrink-0"
                     >
@@ -148,6 +181,7 @@ export function TopSellingCard({ id, title, price, originalPrice, image, descrip
                     </button>
 
                     <button
+                        type="button"
                         onClick={handleBuyNow}
                         className="flex items-center justify-center gap-1 bg-[#f76b1c] text-white py-1.5 px-3 rounded-md hover:bg-[#e05a12] transition-all text-[11px] sm:text-xs font-semibold cursor-pointer shadow-xs hover:shadow-md shrink-0"
                     >

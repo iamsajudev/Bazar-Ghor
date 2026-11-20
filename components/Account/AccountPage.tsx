@@ -4,12 +4,24 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-    User, Package, Heart, MapPin, LogOut, Settings, ChevronRight,
-    Mail, Phone, Calendar, ShoppingBag, CheckCircle2, ShieldCheck, ArrowUpRight
+    User, Package, Heart, LogOut, Settings, ChevronRight,
+    Mail, Phone, Calendar, ShoppingBag, CheckCircle2, ShieldCheck, ArrowUpRight, Loader2
 } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
 import { useCartStore } from "@/store/useCartStore";
+import { formatPrice } from "@/utils/format";
+
+// ডক: GET /orders → paginated orders; ফিল্ড নাম defensiveভাবে ম্যাপ করা
+interface ApiOrder {
+    id: number;
+    order_number?: string;
+    status?: string;
+    total_minor?: number;
+    currency_code?: string;
+    created_at?: string;
+    items?: { name?: string; product_name?: string; quantity?: number }[];
+}
 
 export default function AccountPage() {
     const router = useRouter();
@@ -18,12 +30,42 @@ export default function AccountPage() {
     const { items: cartItems, toggleCart } = useCartStore();
     const [activeTab, setActiveTab] = useState("profile");
 
-    // ✅ প্রোটেক্টেড রুট: লগইন না করলে /login-এ রিডাইরেক্ট
+    // ✅ আসল অর্ডার স্টেট
+    const [orders, setOrders] = useState<ApiOrder[]>([]);
+    const [ordersTotal, setOrdersTotal] = useState(0);
+    const [ordersLoading, setOrdersLoading] = useState(true);
+    const [ordersError, setOrdersError] = useState<string | null>(null);
+
+    // ক্লায়েন্ট-সাইড গার্ড (সার্ভার গার্ডও আছে — এটা বাড়তি)
     useEffect(() => {
         if (isHydrated && !isAuthenticated) {
-            router.push("/login");
+            router.push("/login?redirect=/account");
         }
     }, [isHydrated, isAuthenticated, router]);
+
+    // ✅ অর্ডার ফেচ — লগইন থাকা অবস্থায়
+    useEffect(() => {
+        if (!isHydrated || !isAuthenticated) return;
+        const controller = new AbortController();
+
+        fetch("/api/orders", { signal: controller.signal, cache: "no-store" })
+            .then(async (res) => {
+                if (!res.ok) throw new Error("Failed to load orders");
+                const body = await res.json();
+                setOrders(body.data ?? []);
+                setOrdersTotal(body.meta?.total ?? (body.data?.length ?? 0));
+            })
+            .catch((err) => {
+                if (!controller.signal.aborted) {
+                    setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
+                }
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setOrdersLoading(false);
+            });
+
+        return () => controller.abort();
+    }, [isHydrated, isAuthenticated]);
 
     if (!isHydrated || !isAuthenticated || !user) {
         return (
@@ -33,31 +75,16 @@ export default function AccountPage() {
         );
     }
 
-    const handleLogout = () => {
-        logout();
+    const handleLogout = async () => {
+        await logout();
         router.push("/");
+        router.refresh();
     };
 
-    // ডেমো অর্ডার ডেটা (টাকার সাইন ৳ যুক্ত করা হয়েছে)
-    const mockOrders = [
-        {
-            id: "ORD-2026-001",
-            date: "2026-10-15",
-            total: 2499,
-            status: "Delivered",
-            items: ["Sundarban Honey 1kg"],
-        },
-        {
-            id: "ORD-2026-002",
-            date: "2026-10-20",
-            total: 4550,
-            status: "In Transit",
-            items: ["Gawa Ghee 1kg", "Premium Almonds 500g"],
-        },
-    ];
+    const isVerified = Boolean(user.email_verified_at);
 
     return (
-        <div className="container mx-auto px-4 py-10 ">
+        <div className="container mx-auto px-4 py-10">
             {/* Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6">
                 <Link href="/" className="hover:text-[#f76b1c] transition-colors">Home</Link>
@@ -84,10 +111,10 @@ export default function AccountPage() {
                             <p className="text-gray-400 text-sm mb-3">{user.email}</p>
                             <div className="flex flex-wrap justify-center md:justify-start gap-2">
                                 <span className="bg-white/10 backdrop-blur-md text-emerald-400 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1 border border-white/5">
-                                    <CheckCircle2 className="h-3 w-3" /> {user.role === "admin" ? "Admin" : "Verified Customer"}
+                                    <CheckCircle2 className="h-3 w-3" /> {isVerified ? "Verified Customer" : "Email Not Verified"}
                                 </span>
                                 <span className="bg-white/10 backdrop-blur-md text-gray-300 text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1 border border-white/5">
-                                    <Phone className="h-3 w-3" /> {user.phone || "+880 17XXXXXXXX"}
+                                    <Phone className="h-3 w-3" /> {user.phone || "Not provided"}
                                 </span>
                             </div>
                         </div>
@@ -103,14 +130,14 @@ export default function AccountPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                {/* Sidebar (4 Cols) */}
+                {/* Sidebar */}
                 <aside className="lg:col-span-4 bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-4 shadow-xs">
                     <nav className="space-y-1.5">
                         <button
                             onClick={() => setActiveTab("profile")}
                             className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "profile"
-                                    ? "bg-orange-50 dark:bg-orange-950/20 text-[#f76b1c]"
-                                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                                ? "bg-orange-50 dark:bg-orange-950/20 text-[#f76b1c]"
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                                 }`}
                         >
                             <div className="flex items-center gap-3">
@@ -122,15 +149,15 @@ export default function AccountPage() {
                         <button
                             onClick={() => setActiveTab("orders")}
                             className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "orders"
-                                    ? "bg-orange-50 dark:bg-orange-950/20 text-[#f76b1c]"
-                                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                                ? "bg-orange-50 dark:bg-orange-950/20 text-[#f76b1c]"
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                                 }`}
                         >
                             <div className="flex items-center gap-3">
                                 <Package className="h-4 w-4" /> My Orders
                             </div>
                             <span className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs px-2 py-0.5 rounded-full font-bold">
-                                {mockOrders.length}
+                                {ordersTotal}
                             </span>
                         </button>
 
@@ -161,8 +188,8 @@ export default function AccountPage() {
                         <button
                             onClick={() => setActiveTab("settings")}
                             className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-semibold transition-all cursor-pointer ${activeTab === "settings"
-                                    ? "bg-orange-50 dark:bg-orange-950/20 text-[#f76b1c]"
-                                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                                ? "bg-orange-50 dark:bg-orange-950/20 text-[#f76b1c]"
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50"
                                 }`}
                         >
                             <div className="flex items-center gap-3">
@@ -173,12 +200,11 @@ export default function AccountPage() {
                     </nav>
                 </aside>
 
-                {/* Main Content (8 Cols) */}
+                {/* Main Content */}
                 <main className="lg:col-span-8">
                     {/* Profile Tab */}
                     {activeTab === "profile" && (
                         <div className="space-y-6">
-                            {/* Stats Grid */}
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-5 shadow-xs">
                                     <div className="flex items-center justify-between mb-3">
@@ -187,7 +213,7 @@ export default function AccountPage() {
                                         </div>
                                         <span className="text-xs font-bold text-gray-400 uppercase">Orders</span>
                                     </div>
-                                    <p className="text-2xl font-black text-gray-900 dark:text-white">{mockOrders.length}</p>
+                                    <p className="text-2xl font-black text-gray-900 dark:text-white">{ordersTotal}</p>
                                     <p className="text-xs text-gray-500 mt-1">Total placed orders</p>
                                 </div>
 
@@ -214,7 +240,6 @@ export default function AccountPage() {
                                 </div>
                             </div>
 
-                            {/* Detailed Info Card */}
                             <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-xs">
                                 <div className="flex items-center justify-between mb-6 border-b border-gray-100 dark:border-gray-800 pb-4">
                                     <h2 className="text-lg font-bold text-gray-900 dark:text-white">Personal Information</h2>
@@ -254,8 +279,10 @@ export default function AccountPage() {
                                     <div className="flex items-start gap-3.5 p-4 rounded-2xl bg-gray-50/50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-800">
                                         <ShieldCheck className="h-5 w-5 text-green-600 mt-0.5" />
                                         <div>
-                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-0.5">Account Privilege</span>
-                                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200 capitalize">{user.role || "Customer"}</span>
+                                            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 block mb-0.5">Email Status</span>
+                                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                                                {isVerified ? "Verified" : "Not verified"}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -263,51 +290,77 @@ export default function AccountPage() {
                         </div>
                     )}
 
-                    {/* Orders Tab */}
+                    {/* Orders Tab — ✅ এখন আসল API ডাটা */}
                     {activeTab === "orders" && (
                         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-xs">
                             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 border-b border-gray-100 dark:border-gray-800 pb-4">
                                 Order History
                             </h2>
-                            {mockOrders.length === 0 ? (
+
+                            {ordersLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="h-6 w-6 animate-spin text-[#f76b1c]" />
+                                </div>
+                            ) : ordersError ? (
+                                <p className="text-sm text-red-500 text-center py-12">{ordersError}</p>
+                            ) : orders.length === 0 ? (
                                 <div className="text-center py-12">
                                     <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                                     <p className="text-sm text-gray-500 font-medium">You haven&apos;t placed any orders yet.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {mockOrders.map((order) => (
-                                        <div key={order.id} className="border border-gray-100 dark:border-gray-800 rounded-2xl p-5 hover:border-[#f76b1c]/30 transition-all bg-gray-50/30 dark:bg-gray-800/20">
-                                            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                                                <div>
-                                                    <span className="text-sm font-extrabold text-gray-900 dark:text-white">{order.id}</span>
-                                                    <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                                                        <Calendar className="h-3 w-3" /> {order.date}
-                                                    </p>
-                                                </div>
-                                                <span className={`text-xs font-bold px-3 py-1 rounded-full ${order.status === "Delivered"
+                                    {orders.map((order) => {
+                                        const orderNo = order.order_number ?? `ORD-${order.id}`;
+                                        const date = order.created_at?.slice(0, 10) ?? "";
+                                        const status = order.status ?? "pending";
+                                        const itemNames = (order.items ?? [])
+                                            .map((it) => it.name ?? it.product_name ?? "")
+                                            .filter(Boolean);
+                                        const isDelivered = status.toLowerCase() === "delivered";
+
+                                        return (
+                                            <div key={order.id} className="border border-gray-100 dark:border-gray-800 rounded-2xl p-5 hover:border-[#f76b1c]/30 transition-all bg-gray-50/30 dark:bg-gray-800/20">
+                                                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                                    <div>
+                                                        <span className="text-sm font-extrabold text-gray-900 dark:text-white">{orderNo}</span>
+                                                        <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                                                            <Calendar className="h-3 w-3" /> {date}
+                                                        </p>
+                                                    </div>
+                                                    <span className={`text-xs font-bold px-3 py-1 rounded-full capitalize ${isDelivered
                                                         ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400"
                                                         : "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400"
-                                                    }`}>
-                                                    {order.status}
-                                                </span>
-                                            </div>
-
-                                            <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-4 bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
-                                                📦 {order.items.join(", ")}
-                                            </p>
-
-                                            <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800/60">
-                                                <div>
-                                                    <span className="text-xs text-gray-400 mr-2">Total Amount:</span>
-                                                    <span className="text-base font-black text-[#f76b1c]">৳{order.total}</span>
+                                                        }`}>
+                                                        {status.replace(/_/g, " ")}
+                                                    </span>
                                                 </div>
-                                                <button className="text-xs font-bold text-[#f76b1c] hover:underline flex items-center gap-1 cursor-pointer">
-                                                    View Details <ArrowUpRight className="h-3.5 w-3.5" />
-                                                </button>
+
+                                                {itemNames.length > 0 && (
+                                                    <p className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-4 bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                                                        📦 {itemNames.join(", ")}
+                                                    </p>
+                                                )}
+
+                                                <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800/60">
+                                                    <div>
+                                                        <span className="text-xs text-gray-400 mr-2">Total Amount:</span>
+                                                        <span className="text-base font-black text-[#f76b1c]">
+                                                            {order.total_minor != null
+                                                                ? formatPrice(order.total_minor, order.currency_code)
+                                                                : "—"}
+                                                        </span>
+                                                    </div>
+                                                    <Link
+                                                        href={`/account/orders/${order.id}`}
+                                                        className="text-xs font-bold text-[#f76b1c] hover:underline flex items-center gap-1 cursor-pointer"
+                                                    >
+                                                        View Details <ArrowUpRight className="h-3.5 w-3.5" />
+                                                    </Link>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -320,18 +373,25 @@ export default function AccountPage() {
                                 Account Settings
                             </h2>
                             <div className="space-y-3">
-                                <button className="w-full flex items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+                                {/* ডকে change-password / addresses endpoint নেই — আপাতত disabled */}
+                                <button
+                                    disabled
+                                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 opacity-60 cursor-not-allowed"
+                                >
                                     <div className="text-left">
                                         <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block">Change Password</span>
-                                        <span className="text-xs text-gray-400">Update your account password securely</span>
+                                        <span className="text-xs text-gray-400">Use &quot;Forgot password&quot; on the login page for now</span>
                                     </div>
                                     <ChevronRight className="h-4 w-4 text-gray-400" />
                                 </button>
 
-                                <button className="w-full flex items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+                                <button
+                                    disabled
+                                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 opacity-60 cursor-not-allowed"
+                                >
                                     <div className="text-left">
                                         <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block">Manage Addresses</span>
-                                        <span className="text-xs text-gray-400">Add or edit your shipping addresses</span>
+                                        <span className="text-xs text-gray-400">Coming soon — address is entered at checkout</span>
                                     </div>
                                     <ChevronRight className="h-4 w-4 text-gray-400" />
                                 </button>
@@ -340,7 +400,7 @@ export default function AccountPage() {
                                     onClick={handleLogout}
                                     className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 font-bold text-sm hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors cursor-pointer mt-4"
                                 >
-                                    <LogOut className="h-4 w-4" /> Sign Out of All Sessions
+                                    <LogOut className="h-4 w-4" /> Sign Out
                                 </button>
                             </div>
                         </div>

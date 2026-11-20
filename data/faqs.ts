@@ -18,7 +18,7 @@ export const FAQ_DATA: FAQCategory[] = [
             },
             {
                 q: "What are the delivery charges?",
-                a: "Delivery charge inside Dhaka is ৳60, and outside Dhaka is ৳120. However, delivery is free on orders over ৳1000.",
+                a: "Delivery charge inside Dhaka is $60, and outside Dhaka is $120. However, delivery is free on orders over $1000.",
             },
             {
                 q: "Can I track my order?",

@@ -19,6 +19,12 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "ecommerce.flixzaglobal.us",
+        port: "",
+        pathname: "/**",
+      },
     ],
     // লোকাল ছবি (public ফোল্ডার) লোড করার জন্য
     localPatterns: [

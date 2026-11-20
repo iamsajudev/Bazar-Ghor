@@ -4,10 +4,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ArrowUpRight } from "lucide-react";
-import { MOCK_CATEGORIES } from "@/data/categories";
+import { ChevronLeft, ChevronRight, ArrowUpRight, Loader2 } from "lucide-react";
+import { useCategories } from "@/hook/useCategories"; // আপনার হুকের পাথ অনুযায়ী চেক করুন
 
 export const FeaturedCategories = () => {
+    // API থেকে ডাটা ফেচিং
+    const { categories: apiCategories, isLoading, error } = useCategories();
+console.log(apiCategories,  "asdasdasdasd")
     const [emblaRef, emblaApi] = useEmblaCarousel(
         {
             loop: true,
@@ -40,6 +43,24 @@ export const FeaturedCategories = () => {
 
     const scrollPrev = useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
     const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
+
+    // লোডিং স্টেট হ্যান্ডেল করা
+    if (isLoading) {
+        return (
+            <section className="mb-14 flex justify-center items-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-green-600" />
+            </section>
+        );
+    }
+
+    // এরর বা ডাটা না থাকলে
+    if (error || !apiCategories || apiCategories.length === 0) {
+        return (
+            <section className="mb-14 text-center py-10 text-gray-500">
+                <p>Categories could not be loaded.</p>
+            </section>
+        );
+    }
 
     return (
         <section className="mb-14">
@@ -77,39 +98,54 @@ export const FeaturedCategories = () => {
             {/* Carousel Viewport */}
             <div className="overflow-hidden px-1 py-2" ref={emblaRef}>
                 <div className="flex -ml-3 md:-ml-4 touch-pan-y">
-                    {MOCK_CATEGORIES.map((category) => (
-                        <div
-                            key={category.id}
-                            className="flex-[0_0_45%] sm:flex-[0_0_30%] md:flex-[0_0_20%] lg:flex-[0_0_12.5%] pl-3 md:pl-4 min-w-0"
-                        >
-                            <Link
-                                href={category.link}
-                                className="group relative flex flex-col items-center p-4 rounded-2xl border border-transparent hover:border-green-500 transition-all duration-300 overflow-hidden"
+                    {/* API থেকে আসা ক্যাটাগরি ডাটা ম্যাপ করা হচ্ছে */}
+                    {apiCategories.map((category) => {
+                        // যেহেতু API-তে image_id null আছে, তাই একটি ডামি ইমেজ বা প্লেসহোল্ডার ব্যবহার করা হচ্ছে
+                        // আপনি চাইলে এখানে কন্ডিশনালি ইমেজ সেট করতে পারেন
+                        const imageUrl = category.image_id 
+                            ? `https://your-image-base-url.com/${category.image_id}.png` // আপনার ইমেজ URL স্ট্রাকচার অনুযায়ী পরিবর্তন করুন
+                            : "/images/category-not-found.webp"; // পাবলিক ফোল্ডারে একটি ডিফল্ট ইমেজ রাখুন
+
+                        const categoryLink = `/category/${category.slug}`;
+
+                        return (
+                            <div
+                                key={category.id}
+                                className="flex-[0_0_45%] sm:flex-[0_0_30%] md:flex-[0_0_20%] lg:flex-[0_0_12.5%] pl-3 md:pl-4 min-w-0"
                             >
-                                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl">
-                                    <div className="absolute inset-0 bg-green-500/10 rounded-2xl animate-pulse"></div>
-                                    <div className="absolute inset-0 border-2 border-green-500 rounded-2xl"></div>
-                                </div>
+                                <Link
+                                    href={categoryLink}
+                                    className="group relative flex flex-col items-center p-4 rounded-2xl border border-transparent hover:border-green-500 transition-all duration-300 overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl">
+                                        <div className="absolute inset-0 bg-green-500/10 rounded-2xl animate-pulse"></div>
+                                        <div className="absolute inset-0 border-2 border-green-500 rounded-2xl"></div>
+                                    </div>
 
-                                {/* Image Box */}
-                                <div className="relative w-30 h-30 md:w-36 md:h-36 rounded-2xl bg-green-100 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800/50 overflow-hidden mb-3 flex items-center justify-center group-hover:bg-green-200 dark:group-hover:bg-green-900/50 transition-colors z-10 shadow-sm">
-                                    <img
-                                        src={category.image}
-                                        alt={category.name}
-                                        className="w-full h-full object-contain p-0 group-hover:scale-110 transition-transform duration-500 ease-out"
-                                    />
-                                </div>
+                                    {/* Image Box */}
+                                    <div className="relative w-30 h-30 md:w-36 md:h-36 rounded-2xl bg-green-100 dark:bg-green-900/30 border-2 border-green-200 dark:border-green-800/50 overflow-hidden mb-3 flex items-center justify-center group-hover:bg-green-200 dark:group-hover:bg-green-900/50 transition-colors z-10 shadow-sm">
+                                        <img
+                                            src={imageUrl}
+                                            alt={category.name}
+                                            className="w-full h-full object-contain p-0 group-hover:scale-110 transition-transform duration-500 ease-out"
+                                            onError={(e) => {
+                                                // যদি ইমেজ লোড না হয়, তবে ফলব্যাক হিসেবে টেক্সট দেখাবে বা ডিফল্ট ইমেজ
+                                                (e.target as HTMLImageElement).src = "/images/placeholder-category.png";
+                                            }}
+                                        />
+                                    </div>
 
-                                {/* Category Name */}
-                                <div className="flex items-center justify-center gap-1 w-full relative z-10">
-                                    <span className="text-xs md:text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-green-700 dark:group-hover:text-green-400 transition-colors truncate">
-                                        {category.name}
-                                    </span>
-                                    <ArrowUpRight className="h-3.5 w-3.5 text-green-600 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 shrink-0 hidden sm:block" />
-                                </div>
-                            </Link>
-                        </div>
-                    ))}
+                                    {/* Category Name */}
+                                    <div className="flex items-center justify-center gap-1 w-full relative z-10">
+                                        <span className="text-xs md:text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-green-700 dark:group-hover:text-green-400 transition-colors truncate">
+                                            {category.name}
+                                        </span>
+                                        <ArrowUpRight className="h-3.5 w-3.5 text-green-600 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 shrink-0 hidden sm:block" />
+                                    </div>
+                                </Link>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </section>

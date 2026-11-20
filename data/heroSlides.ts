@@ -5,7 +5,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         id: 1,
         layout: "2-col-big-left",
         bigBanner: {
-            image: "https://cdn.ghorerbazar.com/banner/mM4zY1791177103-light-1000x400.jpg",
+            image: "/images/banner-1.jpg",
             link: "/category/body-oil",
             badge: "",
             title: "",
@@ -14,7 +14,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         },
         smallBanner: {
             // অলিভ অয়েলের জন্য নির্ভরযোগ্য ছবি
-            image: "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=800&q=80",
+            image: "images/banner-6.webp",
             link: "/category/olive-oil",
             badge: "",
             title: "",
@@ -27,7 +27,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         layout: "3-col-center-big",
         leftCard: {
             // বাদাম তেলের জন্য নির্ভরযোগ্য ছবি
-            image: "https://cdn.ghorerbazar.com/banner/KQlqd1788006502-4000x1039.jpeg",
+            image: "images/banner-7.webp",
             link: "/category/almond-oil",
             badge: "",
             title: "",
@@ -36,7 +36,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         },
         centerCard: {
             // ম্যাসাজ অয়েলের জন্য নির্ভরযোগ্য ছবি
-            image: "https://cdn.ghorerbazar.com/banner/y7Wvj1794204237-light-1000x400.png",
+            image: "images/banner-3.webp",
             link: "/category/massage-oil",
             badge: "",
             title: "",
@@ -45,7 +45,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         },
         rightCard: {
             // নারকেল তেলের জন্য নির্ভরযোগ্য ছবি
-            image: "https://cdn.ghorerbazar.com/banner/IVSLi1794206372-500x410.jpg",
+            image: "images/banner-4.webp",
             link: "/category/coconut-oil",
             badge: "",
             title: "",
@@ -57,7 +57,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         id: 3,
         layout: "2-col-big-right",
         smallBanner: {
-            image: "https://cdn.ghorerbazar.com/banner/IVSLi1794206372-500x410.jpg",
+            image: "images/banner-4.webp",
             link: "/category/coconut-oil",
             badge: "",
             title: "",
@@ -66,7 +66,7 @@ export const HERO_SLIDES: HeroSlide[] = [
         },
         bigBanner: {
             // হারবাল অয়েলের জন্য নির্ভরযোগ্য ছবি
-            image: "https://cdn.ghorerbazar.com/banner/v4WL81794205199-dark-1000x400.png",
+            image: "/images/banner-2.jpg",
             link: "/category/herbal-oil",
             badge: "",
             title: "",

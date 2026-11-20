@@ -3,26 +3,154 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-    ChevronRight, SlidersHorizontal, Grid, List, X, ChevronDown,
-    Loader2, PackageSearch, ChevronLeft, Search,
+    ChevronRight,
+    SlidersHorizontal,
+    Grid,
+    List,
+    X,
+    ChevronDown,
+    Loader2,
+    PackageSearch,
+    ChevronLeft,
+    Search,
 } from "lucide-react";
-import { useCategoryProducts, ProductSort, ApiProduct } from "@/hook/useCategoryProducts";
+import {
+    useCategoryProducts,
+    ProductSort,
+    ApiProduct,
+} from "@/hook/useCategoryProducts";
 import { useBrands } from "@/hook/useBrands";
 import { formatPrice } from "@/utils/format";
 
+interface CategoryImageObject {
+    id?: number;
+    url?: string | null;
+    alt?: string | null;
+}
+
+interface ProductVariantData {
+    id?: number;
+    sku?: string | null;
+    regular_price_minor?: number | null;
+    sale_price_minor?: number | null;
+    effective_price_minor?: number | null;
+    price_minor?: number | null;
+    in_stock?: boolean | null;
+    image_url?: string | null;
+    thumbnail_url?: string | null;
+}
+
+interface ExtendedProduct extends ApiProduct {
+    primary_image?: CategoryImageObject | null;
+    variants?: ProductVariantData[] | null;
+    effective_price_minor?: number | null;
+    regular_price_minor?: number | null;
+    sale_price_minor?: number | null;
+    compare_at_price_minor?: number | null;
+    in_stock?: boolean | null;
+}
+
 interface CategoryClientProps {
-    category: { id: number; name: string; slug: string; description?: string | null };
+    category: {
+        id: number;
+        name: string;
+        slug: string;
+        description?: string | null;
+        icon_url?: string | null;
+        thumbnail_url?: string | null;
+        image_url?: string | null;
+        banner_url?: string | null;
+    };
 }
 
 const PLACEHOLDER_IMAGE = "/images/product-not-found.webp";
 const PER_PAGE = 12;
 
-function effectivePrice(p: ApiProduct): number {
-    return p.price_minor; // ডক অনুযায়ী minor units; সেল প্রাইস ফিল্ড থাকলে এখানে adjust করবেন
+function toValidNumber(val: unknown): number | null {
+    if (typeof val === "number" && Number.isFinite(val)) return val;
+    if (typeof val === "string" && val.trim() !== "" && Number.isFinite(Number(val))) {
+        return Number(val);
+    }
+    return null;
+}
+
+function getPricingMinor(product: ExtendedProduct): {
+    priceMinor: number | null;
+    compareAtMinor: number | null;
+} {
+    const firstVariant =
+        Array.isArray(product.variants) && product.variants.length > 0
+            ? product.variants[0]
+            : undefined;
+
+    const variantEffective =
+        toValidNumber(firstVariant?.effective_price_minor) ??
+        toValidNumber(firstVariant?.sale_price_minor) ??
+        toValidNumber(firstVariant?.regular_price_minor) ??
+        toValidNumber(firstVariant?.price_minor);
+
+    const productPrice =
+        toValidNumber(product.effective_price_minor) ??
+        toValidNumber(product.sale_price_minor) ??
+        toValidNumber(product.price_minor) ??
+        toValidNumber(product.regular_price_minor);
+
+    const priceMinor = variantEffective ?? productPrice;
+
+    const compareAtMinor =
+        toValidNumber(product.compare_at_price_minor) ??
+        (toValidNumber(firstVariant?.sale_price_minor) !== null &&
+        toValidNumber(firstVariant?.regular_price_minor) !== null &&
+        Number(firstVariant?.regular_price_minor) > Number(firstVariant?.sale_price_minor)
+            ? Number(firstVariant?.regular_price_minor)
+            : null);
+
+    return { priceMinor, compareAtMinor };
+}
+
+function safeFormatMoney(minor: number, currencyCode?: string | null): string {
+    try {
+        const formatted = formatPrice(minor, currencyCode || "BDT");
+        if (formatted && !formatted.includes("NaN")) {
+            return formatted;
+        }
+    } catch {
+        // Fallback below if formatPrice throws on currency code
+    }
+    return `৳${(minor / 100).toFixed(2)}`;
+}
+
+function getProductImage(product: ExtendedProduct): { src: string; alt: string } {
+    const variantImg = Array.isArray(product.variants)
+        ? product.variants.find(
+              (v) =>
+                  (typeof v?.image_url === "string" && v.image_url.trim() !== "") ||
+                  (typeof v?.thumbnail_url === "string" && v.thumbnail_url.trim() !== "")
+          )
+        : undefined;
+
+    const rawSrc =
+        product.primary_image?.url?.trim() ||
+        product.thumbnail_url?.trim() ||
+        product.image_url?.trim() ||
+        variantImg?.image_url?.trim() ||
+        variantImg?.thumbnail_url?.trim() ||
+        PLACEHOLDER_IMAGE;
+
+    const alt = product.primary_image?.alt?.trim() || product.name;
+
+    return { src: rawSrc, alt };
+}
+
+function getProductInStock(product: ExtendedProduct): boolean {
+    if (typeof product.in_stock === "boolean") return product.in_stock;
+    if (Array.isArray(product.variants) && product.variants.length > 0) {
+        return product.variants.some((v) => v.in_stock !== false);
+    }
+    return true;
 }
 
 export function CategoryClient({ category }: CategoryClientProps) {
-    // ✅ ফিল্টার স্টেট — এগুলো এখন API-তে যাবে, ক্লায়েন্টে ফিল্টার হবে না
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [minTaka, setMinTaka] = useState<number>(0);
@@ -35,9 +163,14 @@ export function CategoryClient({ category }: CategoryClientProps) {
     const [view, setView] = useState<"grid" | "list">("grid");
     const [showFilters, setShowFilters] = useState(false);
 
-    const { brands } = useBrands(); // ব্র্যান্ড ফিল্টারের অপশনগুলোর জন্য (ক্যাশড, একটাই কল)
+    const { brands } = useBrands();
 
-    // সার্চ debounce — প্রতি কীস্ট্রোকে API কল না করে ৪০০ms থেমে তারপর
+    const headerImageUrl =
+        category.icon_url?.trim() ||
+        category.thumbnail_url?.trim() ||
+        category.image_url?.trim() ||
+        undefined;
+
     useEffect(() => {
         const t = setTimeout(() => {
             setDebouncedSearch(search);
@@ -58,11 +191,12 @@ export function CategoryClient({ category }: CategoryClientProps) {
 
     const changeFilter = (fn: () => void) => {
         fn();
-        setPage(1); // ফিল্টার বদলালে প্রথম পেজে ফিরে যান
+        setPage(1);
     };
 
     const clearFilters = () => {
         setSearch("");
+        setDebouncedSearch("");
         setMinTaka(0);
         setMaxTaka(0);
         setBrandSlug("");
@@ -72,40 +206,73 @@ export function CategoryClient({ category }: CategoryClientProps) {
     };
 
     const hasActiveFilters =
-        search !== "" || minTaka > 0 || maxTaka > 0 || brandSlug !== "" || inStock;
+        search !== "" ||
+        minTaka > 0 ||
+        maxTaka > 0 ||
+        brandSlug !== "" ||
+        inStock;
 
     return (
         <div className="container mx-auto px-4 py-8">
             {/* Breadcrumb */}
             <nav className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-                <Link href="/" className="hover:text-green-600">Home</Link>
+                <Link href="/" className="hover:text-green-600 transition-colors">
+                    Home
+                </Link>
                 <ChevronRight className="h-4 w-4" />
-                <span className="text-gray-800 dark:text-gray-200 font-medium">{category.name}</span>
+                <span className="text-gray-800 dark:text-gray-200 font-medium">
+                    {category.name}
+                </span>
             </nav>
 
             {/* হেডার */}
-            <div className="mb-8">
-                <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-2">
-                    {category.name}
-                </h1>
-                {category.description && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 max-w-2xl">
-                        {category.description}
-                    </p>
+            <div className="mb-8 flex items-start gap-4">
+                {headerImageUrl && (
+                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center shrink-0">
+                        <img
+                            src={headerImageUrl}
+                            alt={category.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                                const parent = e.currentTarget.parentElement;
+                                if (parent) parent.style.display = "none";
+                            }}
+                        />
+                    </div>
                 )}
-                <p className="text-sm text-gray-500">
-                    {isLoading ? "Loading..." : `${meta.total} products found`}
-                </p>
+                <div>
+                    <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-2">
+                        {category.name}
+                    </h1>
+                    {category.description && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 max-w-2xl">
+                            {category.description}
+                        </p>
+                    )}
+                    <p className="text-sm text-gray-500">
+                        {isLoading ? "Loading..." : `${meta.total} products found`}
+                    </p>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 {/* ফিল্টার সাইডবার */}
-                <aside className={`lg:col-span-1 ${showFilters ? "block" : "hidden lg:block"}`}>
+                <aside
+                    className={`lg:col-span-1 ${
+                        showFilters ? "block" : "hidden lg:block"
+                    }`}
+                >
                     <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5 sticky top-24">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Filters</h2>
+                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                                Filters
+                            </h2>
                             {hasActiveFilters && (
-                                <button onClick={clearFilters} className="text-xs text-red-500 hover:underline">
+                                <button
+                                    type="button"
+                                    onClick={clearFilters}
+                                    className="text-xs text-red-500 hover:underline cursor-pointer"
+                                >
                                     Clear all
                                 </button>
                             )}
@@ -113,7 +280,9 @@ export function CategoryClient({ category }: CategoryClientProps) {
 
                         {/* সার্চ */}
                         <div className="mb-6 pb-6 border-b border-gray-100 dark:border-gray-800">
-                            <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">Search</h3>
+                            <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">
+                                Search
+                            </h3>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                 <input
@@ -126,17 +295,21 @@ export function CategoryClient({ category }: CategoryClientProps) {
                             </div>
                         </div>
 
-                        {/* দাম — টাকায় ইনপুট, API-তে পয়সায় যাবে */}
+                        {/* দাম */}
                         <div className="mb-6 pb-6 border-b border-gray-100 dark:border-gray-800">
                             <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">
-                                Price Range ($)
+                                Price Range
                             </h3>
                             <div className="flex items-center gap-2">
                                 <input
                                     type="number"
                                     min={0}
                                     value={minTaka || ""}
-                                    onChange={(e) => changeFilter(() => setMinTaka(Number(e.target.value)))}
+                                    onChange={(e) =>
+                                        changeFilter(() =>
+                                            setMinTaka(Math.max(0, Number(e.target.value)))
+                                        )
+                                    }
                                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-transparent"
                                     placeholder="Min"
                                 />
@@ -145,25 +318,35 @@ export function CategoryClient({ category }: CategoryClientProps) {
                                     type="number"
                                     min={0}
                                     value={maxTaka || ""}
-                                    onChange={(e) => changeFilter(() => setMaxTaka(Number(e.target.value)))}
+                                    onChange={(e) =>
+                                        changeFilter(() =>
+                                            setMaxTaka(Math.max(0, Number(e.target.value)))
+                                        )
+                                    }
                                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-transparent"
                                     placeholder="Max"
                                 />
                             </div>
                         </div>
 
-                        {/* ব্র্যান্ড — API লিস্ট থেকে, সার্ভার ফিল্টার */}
+                        {/* ব্র্যান্ড */}
                         {brands.length > 0 && (
                             <div className="mb-6 pb-6 border-b border-gray-100 dark:border-gray-800">
-                                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">Brand</h3>
+                                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3">
+                                    Brand
+                                </h3>
                                 <select
                                     value={brandSlug}
-                                    onChange={(e) => changeFilter(() => setBrandSlug(e.target.value))}
-                                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer"
+                                    onChange={(e) =>
+                                        changeFilter(() => setBrandSlug(e.target.value))
+                                    }
+                                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer"
                                 >
                                     <option value="">All Brands</option>
                                     {brands.map((b) => (
-                                        <option key={b.id} value={b.slug}>{b.name}</option>
+                                        <option key={b.id} value={b.slug}>
+                                            {b.name}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -174,7 +357,9 @@ export function CategoryClient({ category }: CategoryClientProps) {
                             <input
                                 type="checkbox"
                                 checked={inStock}
-                                onChange={(e) => changeFilter(() => setInStock(e.target.checked))}
+                                onChange={(e) =>
+                                    changeFilter(() => setInStock(e.target.checked))
+                                }
                                 className="w-4 h-4 rounded accent-green-600"
                             />
                             <span className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-green-600 transition-colors">
@@ -190,6 +375,7 @@ export function CategoryClient({ category }: CategoryClientProps) {
                     <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100 dark:border-gray-800">
                         <div className="flex items-center gap-2">
                             <button
+                                type="button"
                                 onClick={() => setShowFilters(!showFilters)}
                                 className="lg:hidden flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-semibold"
                             >
@@ -198,16 +384,26 @@ export function CategoryClient({ category }: CategoryClientProps) {
                             </button>
                             <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
                                 <button
+                                    type="button"
                                     onClick={() => setView("grid")}
                                     aria-label="Grid view"
-                                    className={`p-2 rounded-md transition-colors ${view === "grid" ? "bg-white dark:bg-gray-700 shadow-sm" : ""}`}
+                                    className={`p-2 rounded-md transition-colors cursor-pointer ${
+                                        view === "grid"
+                                            ? "bg-white dark:bg-gray-700 shadow-sm"
+                                            : ""
+                                    }`}
                                 >
                                     <Grid className="h-4 w-4" />
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => setView("list")}
                                     aria-label="List view"
-                                    className={`p-2 rounded-md transition-colors ${view === "list" ? "bg-white dark:bg-gray-700 shadow-sm" : ""}`}
+                                    className={`p-2 rounded-md transition-colors cursor-pointer ${
+                                        view === "list"
+                                            ? "bg-white dark:bg-gray-700 shadow-sm"
+                                            : ""
+                                    }`}
                                 >
                                     <List className="h-4 w-4" />
                                 </button>
@@ -215,14 +411,19 @@ export function CategoryClient({ category }: CategoryClientProps) {
                         </div>
 
                         <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500 hidden sm:block">Sort by:</span>
+                            <span className="text-sm text-gray-500 hidden sm:block">
+                                Sort by:
+                            </span>
                             <div className="relative">
                                 <select
                                     value={sort}
-                                    onChange={(e) => changeFilter(() => setSort(e.target.value as ProductSort | ""))}
-                                    className="appearance-none pl-3 pr-8 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-semibold bg-transparent focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer"
+                                    onChange={(e) =>
+                                        changeFilter(() =>
+                                            setSort(e.target.value as ProductSort | "")
+                                        )
+                                    }
+                                    className="appearance-none pl-3 pr-8 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-semibold bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500 cursor-pointer"
                                 >
-                                    {/* ✅ ডকের sort ভ্যালুগুলো */}
                                     <option value="">Relevance</option>
                                     <option value="newest">Newest</option>
                                     <option value="name_asc">Name: A to Z</option>
@@ -248,64 +449,113 @@ export function CategoryClient({ category }: CategoryClientProps) {
                     {isLoading && !error && (
                         <div className="flex items-center justify-center py-24">
                             <Loader2 className="h-8 w-8 animate-spin text-green-600" />
-                            <span className="ml-2 text-gray-600">Loading products...</span>
+                            <span className="ml-2 text-gray-600">
+                                Loading products...
+                            </span>
                         </div>
                     )}
 
                     {/* প্রোডাক্ট গ্রিড */}
                     {!isLoading && !error && products.length > 0 && (
                         <>
-                            <div className={`grid gap-4 md:gap-6 ${view === "grid" ? "grid-cols-2 md:grid-cols-3" : "grid-cols-1"}`}>
-                                {products.map((product) => (
-                                    <Link
-                                        key={product.id}
-                                        href={`/products/${product.slug}`}
-                                        className={`group border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-green-500 transition-all bg-white dark:bg-gray-900 ${view === "list" ? "flex items-center gap-4 p-4" : "p-4"}`}
-                                    >
-                                        <div className={`bg-green-50 dark:bg-green-900/20 rounded-lg overflow-hidden flex items-center justify-center ${view === "list" ? "w-28 h-28 shrink-0" : "w-full h-40 mb-3"}`}>
-                                            <img
-                                                src={product.thumbnail_url ?? product.image_url ?? PLACEHOLDER_IMAGE}
-                                                alt={product.name}
-                                                className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
-                                                onError={(e) => {
-                                                    (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
-                                                }}
-                                            />
-                                        </div>
-                                        <div className={view === "list" ? "flex-1" : ""}>
-                                            <h3 className="font-bold text-base md:text-lg text-gray-900 dark:text-white group-hover:text-green-700 dark:group-hover:text-green-400 transition-colors line-clamp-2">
-                                                {product.name}
-                                            </h3>
-                                            {product.brand?.name && (
-                                                <p className="text-xs text-gray-500 mt-0.5">{product.brand.name}</p>
-                                            )}
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                {/* ✅ minor units → টাকা */}
-                                                <span className="text-green-600 dark:text-green-400 font-bold">
-                                                    {formatPrice(effectivePrice(product), product.currency_code)}
-                                                </span>
-                                                {product.compare_at_price_minor != null &&
-                                                    product.compare_at_price_minor > product.price_minor && (
-                                                        <span className="text-xs text-gray-400 line-through">
-                                                            {formatPrice(product.compare_at_price_minor, product.currency_code)}
-                                                        </span>
-                                                    )}
+                            <div
+                                className={`grid gap-4 md:gap-6 ${
+                                    view === "grid"
+                                        ? "grid-cols-2 md:grid-cols-3"
+                                        : "grid-cols-1"
+                                }`}
+                            >
+                                {(products as ExtendedProduct[]).map((product) => {
+                                    const { src, alt } = getProductImage(product);
+                                    const { priceMinor, compareAtMinor } =
+                                        getPricingMinor(product);
+                                    const isAvailable = getProductInStock(product);
+
+                                    return (
+                                        <Link
+                                            key={product.id}
+                                            href={`/products/${product.slug}`}
+                                            className={`group border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:border-green-500 transition-all bg-white dark:bg-gray-900 ${
+                                                view === "list"
+                                                    ? "flex items-center gap-4 p-3"
+                                                    : "flex flex-col"
+                                            }`}
+                                        >
+                                            <div
+                                                className={`bg-green-50 dark:bg-green-900/20 overflow-hidden flex items-center justify-center ${
+                                                    view === "list"
+                                                        ? "w-28 h-28 rounded-lg shrink-0"
+                                                        : "w-full h-80"
+                                                }`}
+                                            >
+                                                <img
+                                                    src={src}
+                                                    alt={alt}
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                    onError={(e) => {
+                                                        const target = e.currentTarget;
+                                                        if (
+                                                            target.src !==
+                                                            window.location.origin +
+                                                                PLACEHOLDER_IMAGE
+                                                        ) {
+                                                            target.src = PLACEHOLDER_IMAGE;
+                                                        }
+                                                    }}
+                                                />
                                             </div>
-                                            {product.in_stock === false && (
-                                                <span className="inline-block mt-1.5 text-[11px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded-full">
-                                                    Out of stock
-                                                </span>
-                                            )}
-                                        </div>
-                                    </Link>
-                                ))}
+                                            <div
+                                                className={
+                                                    view === "list" ? "flex-1 py-1" : "p-4"
+                                                }
+                                            >
+                                                <h3 className="font-bold text-base md:text-lg text-gray-900 dark:text-white group-hover:text-green-700 dark:group-hover:text-green-400 transition-colors line-clamp-2">
+                                                    {product.name}
+                                                </h3>
+                                                {product.brand?.name && (
+                                                    <p className="text-xs text-gray-500 mt-0.5">
+                                                        {product.brand.name}
+                                                    </p>
+                                                )}
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <span className="text-green-600 dark:text-green-400 font-bold">
+                                                        {priceMinor !== null
+                                                            ? safeFormatMoney(
+                                                                  priceMinor,
+                                                                  product.currency_code
+                                                              )
+                                                            : "Price on request"}
+                                                    </span>
+                                                    {compareAtMinor !== null &&
+                                                        priceMinor !== null &&
+                                                        compareAtMinor > priceMinor && (
+                                                            <span className="text-xs text-gray-400 line-through">
+                                                                {safeFormatMoney(
+                                                                    compareAtMinor,
+                                                                    product.currency_code
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                </div>
+                                                {!isAvailable && (
+                                                    <span className="inline-block mt-1.5 text-[11px] font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded-full">
+                                                        Out of stock
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </Link>
+                                    );
+                                })}
                             </div>
 
-                            {/* ✅ পেজিনেশন — সার্ভারের meta থেকে */}
+                            {/* পেজিনেশন */}
                             {meta.last_page > 1 && (
                                 <div className="flex items-center justify-center gap-2 mt-10">
                                     <button
-                                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                        type="button"
+                                        onClick={() =>
+                                            setPage((p) => Math.max(1, p - 1))
+                                        }
                                         disabled={meta.current_page <= 1}
                                         className="h-9 w-9 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center disabled:opacity-40 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all cursor-pointer disabled:cursor-not-allowed"
                                         aria-label="Previous page"
@@ -316,7 +566,12 @@ export function CategoryClient({ category }: CategoryClientProps) {
                                         Page {meta.current_page} of {meta.last_page}
                                     </span>
                                     <button
-                                        onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
+                                        type="button"
+                                        onClick={() =>
+                                            setPage((p) =>
+                                                Math.min(meta.last_page, p + 1)
+                                            )
+                                        }
                                         disabled={meta.current_page >= meta.last_page}
                                         className="h-9 w-9 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center disabled:opacity-40 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all cursor-pointer disabled:cursor-not-allowed"
                                         aria-label="Next page"
@@ -344,8 +599,9 @@ export function CategoryClient({ category }: CategoryClientProps) {
                             </p>
                             {hasActiveFilters && (
                                 <button
+                                    type="button"
                                     onClick={clearFilters}
-                                    className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors"
+                                    className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors cursor-pointer"
                                 >
                                     Clear Filters
                                 </button>

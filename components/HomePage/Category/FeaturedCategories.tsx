@@ -102,8 +102,8 @@ console.log(apiCategories,  "asdasdasdasd")
                     {apiCategories.map((category) => {
                         // যেহেতু API-তে image_id null আছে, তাই একটি ডামি ইমেজ বা প্লেসহোল্ডার ব্যবহার করা হচ্ছে
                         // আপনি চাইলে এখানে কন্ডিশনালি ইমেজ সেট করতে পারেন
-                        const imageUrl = category.image_id 
-                            ? `https://your-image-base-url.com/${category.image_id}.png` // আপনার ইমেজ URL স্ট্রাকচার অনুযায়ী পরিবর্তন করুন
+                        const imageUrl = category.image_url 
+                            ? `${category.image_url}` // আপনার ইমেজ URL স্ট্রাকচার অনুযায়ী পরিবর্তন করুন
                             : "/images/category-not-found.webp"; // পাবলিক ফোল্ডারে একটি ডিফল্ট ইমেজ রাখুন
 
                         const categoryLink = `/category/${category.slug}`;

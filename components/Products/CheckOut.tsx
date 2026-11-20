@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -26,32 +26,68 @@ const API_BASE = (
   "https://ecommerce.flixzaglobal.us/api/v1"
 ).replace(/\/+$/, "");
 
+// Change this ID to your actual shipping method ID from DB/Admin (e.g. 2, 3, etc.)
+const DEFAULT_SHIPPING_METHOD_ID = 2;
+
 interface ShippingOption {
   id: number | string;
-  name?: string;
-  label?: string;
-  title?: string;
+  name: string;
+  feeMinor?: number;
   rate_minor?: number;
   price_minor?: number;
   amount_minor?: number;
   cost_minor?: number;
+  shipping_fee_minor?: number;
+  price?: number;
+  rate?: number;
+  amount?: number;
+  cost?: number;
+}
+
+interface ShippingAreaItem {
+  id?: number | string;
+  shipping_method_id?: number | string;
+  area?: string;
+  city?: string;
+  country_code?: string;
+  postal_prefix?: string;
+  postal_code?: string;
+  region_code?: string;
+  region?: string;
+  name?: string;
+  rate_minor?: number;
+  price_minor?: number;
   price?: number;
 }
 
+const toMinorNumber = (val: unknown, isMajor = false): number | undefined => {
+  if (typeof val === "number" && !Number.isNaN(val)) {
+    return isMajor ? Math.round(val * 100) : Math.round(val);
+  }
+  if (typeof val === "string" && val.trim() !== "" && !Number.isNaN(Number(val))) {
+    const parsed = Number(val);
+    return isMajor ? Math.round(parsed * 100) : Math.round(parsed);
+  }
+  return undefined;
+};
+
 const extractShippingFeeMinor = (opt: any): number | undefined => {
+  if (typeof opt?.feeMinor === "number" && !Number.isNaN(opt.feeMinor)) {
+    return Math.round(opt.feeMinor);
+  }
+
   const minor =
     opt?.rate_minor ??
     opt?.price_minor ??
     opt?.amount_minor ??
     opt?.cost_minor ??
     opt?.shipping_fee_minor;
-  if (typeof minor === "number" && !Number.isNaN(minor)) return minor;
+
+  const parsedMinor = toMinorNumber(minor, false);
+  if (parsedMinor !== undefined) return parsedMinor;
 
   const major = opt?.price ?? opt?.rate ?? opt?.amount ?? opt?.cost;
-  if (typeof major === "number" && !Number.isNaN(major)) {
-    return Math.round(major * 100);
-  }
-  return undefined;
+  return toMinorNumber(major, true);
 };
 
 const extractShippingMethodId = (item: any): number | string | undefined => {
@@ -60,10 +96,30 @@ const extractShippingMethodId = (item: any): number | string | undefined => {
     item?.method_id ??
     item?.shipping_option_id ??
     item?.id;
-  if (candidate !== undefined && candidate !== null && String(candidate) !== "") {
+  if (candidate !== undefined && candidate !== null && String(candidate).trim() !== "") {
     return candidate;
   }
   return undefined;
+};
+
+const extractListFromResponse = (payload: any): any[] => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.options)) return payload.data.options;
+  if (Array.isArray(payload?.options)) return payload.options;
+  if (Array.isArray(payload?.data?.methods)) return payload.data.methods;
+  if (Array.isArray(payload?.methods)) return payload.methods;
+  if (Array.isArray(payload?.data?.shipping_methods)) return payload.data.shipping_methods;
+  if (Array.isArray(payload?.data?.areas)) return payload.data.areas;
+  if (Array.isArray(payload?.data?.data)) return payload.data.data;
+  if (Array.isArray(payload?.data?.zones)) return payload.data.zones;
+  return [];
+};
+
+const parseMethodIdForApi = (rawId: string): number | string => {
+  const trimmed = rawId.trim();
+  if (!trimmed) return DEFAULT_SHIPPING_METHOD_ID;
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : trimmed;
 };
 
 export default function CheckoutPage() {
@@ -71,7 +127,7 @@ export default function CheckoutPage() {
   const { items, guestToken, fetchCart, clearCart } = useCartStore();
 
   const [loading, setLoading] = useState(false);
-  const [shippingLoading, setShippingLoading] = useState(false);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -93,64 +149,302 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("");
   const [discountMinor, setDiscountMinor] = useState(0);
   const [couponApplied, setCouponApplied] = useState(false);
-  const [shippingChargeMinor, setShippingChargeMinor] = useState(6000); // 60 BDT default display
-  const [shippingMethodId, setShippingMethodId] = useState<string>("");
+  const [shippingChargeMinor, setShippingChargeMinor] = useState(6000);
+  const [shippingMethodId, setShippingMethodId] = useState<string>(
+    String(DEFAULT_SHIPPING_METHOD_ID)
+  );
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+  const [shippingAreas, setShippingAreas] = useState<ShippingAreaItem[]>([]);
+  const [serverTotalMinor, setServerTotalMinor] = useState<number | null>(null);
 
-  const resolveShippingData = useCallback(
-    async (cityVal: string, postalVal: string, token?: string | null) => {
-      setShippingLoading(true);
+  const lastShippingKeyRef = useRef<string>("");
+
+  const getRequestHeaders = useCallback(
+    (tokenOverride?: string | null): HeadersInit => {
+      const effectiveGuestToken =
+        tokenOverride !== undefined ? tokenOverride : guestToken;
+      const authToken =
+        typeof window !== "undefined"
+          ? localStorage.getItem("auth_token") || localStorage.getItem("token")
+          : null;
+
+      return {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(effectiveGuestToken ? { "X-Guest-Cart-Token": effectiveGuestToken } : {}),
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      };
+    },
+    [guestToken]
+  );
+
+  const fetchCheckoutQuote = useCallback(
+    async (params: {
+      methodIdStr?: string;
+      coupon?: string;
+      postalVal?: string;
+      cityVal?: string;
+      regionVal?: string;
+      areaVal?: string;
+      tokenOverride?: string | null;
+      showAlertOnCouponError?: boolean;
+    }) => {
+      const parsedMethodId = parseMethodIdForApi(
+        params.methodIdStr ?? shippingMethodId
+      );
+
+      setQuoteLoading(true);
       try {
-        const headers: HeadersInit = {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          ...(token ? { "X-Guest-Cart-Token": token } : {}),
+        const body: Record<string, any> = {
+          shipping_method_id: parsedMethodId,
+          country_code: "BD",
+          ...(params.cityVal?.trim() ? { city: params.cityVal.trim() } : {}),
+          ...(params.regionVal?.trim()
+            ? { region_code: params.regionVal.trim(), region: params.regionVal.trim() }
+            : {}),
+          ...(params.areaVal?.trim() ? { area: params.areaVal.trim() } : {}),
+          ...(params.postalVal?.trim() ? { postal_code: params.postalVal.trim() } : {}),
+          ...(params.coupon?.trim() ? { coupon_code: params.coupon.trim() } : {}),
         };
 
-        // 1. Try POST /shipping/options
+        const res = await fetch(`${API_BASE}/checkout/quote`, {
+          method: "POST",
+          headers: getRequestHeaders(params.tokenOverride),
+          body: JSON.stringify(body),
+        });
+
+        const json = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          if (params.showAlertOnCouponError) {
+            setCouponApplied(false);
+            setDiscountMinor(0);
+            alert(json?.message || "Invalid coupon code.");
+          }
+          return;
+        }
+
+        const quote = json?.data?.quote || json?.data || json;
+
+        const qShipping = toMinorNumber(
+          quote?.shipping_minor ??
+            quote?.shipping_fee_minor ??
+            quote?.shipping_charge_minor ??
+            quote?.delivery_fee_minor,
+          false
+        );
+        if (qShipping !== undefined) {
+          setShippingChargeMinor(qShipping);
+        }
+
+        const qDiscount = toMinorNumber(
+          quote?.discount_minor ??
+            quote?.coupon_discount_minor ??
+            quote?.promo_discount_minor,
+          false
+        );
+        if (qDiscount !== undefined) {
+          setDiscountMinor(qDiscount);
+          if (params.coupon?.trim()) {
+            setCouponApplied(true);
+          }
+        } else if (params.coupon?.trim()) {
+          setCouponApplied(true);
+        }
+
+        const qTotal = toMinorNumber(
+          quote?.total_minor ??
+            quote?.grand_total_minor ??
+            quote?.payable_minor ??
+            quote?.final_total_minor,
+          false
+        );
+        setServerTotalMinor(qTotal !== undefined ? qTotal : null);
+
+        if (params.showAlertOnCouponError && params.coupon?.trim()) {
+          alert("Coupon applied!");
+        }
+      } catch (err) {
+        console.error("Failed to fetch checkout quote:", err);
+        if (params.showAlertOnCouponError) {
+          alert("Could not verify coupon code right now.");
+        }
+      } finally {
+        setQuoteLoading(false);
+      }
+    },
+    [getRequestHeaders, shippingMethodId]
+  );
+
+  const resolveShippingData = useCallback(
+    async (
+      cityVal: string,
+      postalVal: string,
+      areaVal: string,
+      token?: string | null
+    ) => {
+      const dedupeKey = `${cityVal}|${postalVal.trim()}|${areaVal.trim()}|${token || ""}`;
+      if (lastShippingKeyRef.current === dedupeKey) return;
+      lastShippingKeyRef.current = dedupeKey;
+
+      try {
+        const headers = getRequestHeaders(token);
+
+        let areasList: ShippingAreaItem[] = [];
+        try {
+          const areasRes = await fetch(`${API_BASE}/shipping/areas`, {
+            method: "GET",
+            headers: { Accept: "application/json" },
+            cache: "no-store",
+          });
+          const areasJson = await areasRes.json().catch(() => ({}));
+
+          if (areasRes.ok) {
+            areasList = extractListFromResponse(areasJson);
+            setShippingAreas(areasList);
+          }
+        } catch (areaErr) {
+          console.error("Failed to fetch shipping areas:", areaErr);
+        }
+
+        const matchedArea =
+          areasList.find((a) => {
+            const byArea =
+              areaVal.trim() &&
+              String(a.area || "")
+                .toLowerCase()
+                .includes(areaVal.trim().toLowerCase());
+            const byCity =
+              cityVal.trim() &&
+              String(a.city || "")
+                .toLowerCase()
+                .includes(cityVal.trim().toLowerCase());
+            return byArea || byCity;
+          }) || areasList[0];
+
+        const effectivePostal = (
+          postalVal.trim() ||
+          matchedArea?.postal_code ||
+          matchedArea?.postal_prefix ||
+          "1200"
+        ).trim();
+
+        const effectiveCountry = (matchedArea?.country_code || "BD").trim();
+        const effectiveCity = (matchedArea?.city || cityVal || "Dhaka").trim();
+        const effectiveRegion = (
+          matchedArea?.region_code ||
+          matchedArea?.region ||
+          effectiveCity
+        ).trim();
+        const effectiveArea = (areaVal.trim() || matchedArea?.area || "").trim();
+
+        const optionsPayload: Record<string, any> = {
+          country_code: effectiveCountry,
+          postal_code: effectivePostal,
+          city: effectiveCity,
+          region_code: effectiveRegion,
+          ...(effectiveArea ? { area: effectiveArea } : {}),
+        };
+
         const optionsRes = await fetch(`${API_BASE}/shipping/options`, {
           method: "POST",
           headers,
-          body: JSON.stringify({
-            country_code: "BD",
-            postal_code: (postalVal || "1200").trim(),
-            city: cityVal,
-          }),
+          body: JSON.stringify(optionsPayload),
         });
 
+        const optionsJson = await optionsRes.json().catch(() => ({}));
+
         if (optionsRes.ok) {
-          const optionsJson = await optionsRes.json().catch(() => ({}));
-          const rawList: any[] = Array.isArray(optionsJson?.data)
-            ? optionsJson.data
-            : Array.isArray(optionsJson?.data?.options)
-            ? optionsJson.data.options
-            : Array.isArray(optionsJson?.options)
-            ? optionsJson.options
-            : Array.isArray(optionsJson?.data?.methods)
-            ? optionsJson.data.methods
-            : [];
+          const rawList = extractListFromResponse(optionsJson);
 
           const normalized: ShippingOption[] = rawList
             .map((opt) => {
               const id = extractShippingMethodId(opt);
               if (id === undefined) return null;
+              const fee = extractShippingFeeMinor(opt);
+              const baseLabel =
+                opt?.name ||
+                opt?.label ||
+                opt?.title ||
+                `Shipping Option #${id}`;
+              const displayLabel =
+                typeof fee === "number" && !String(baseLabel).includes("৳")
+                  ? `${baseLabel} - ৳${(fee / 100).toFixed(2)}`
+                  : String(baseLabel);
+
               return {
                 ...opt,
                 id,
-                name:
-                  opt?.name ||
-                  opt?.label ||
-                  opt?.title ||
-                  `Shipping Option #${id}`,
+                name: displayLabel,
+                feeMinor: fee,
               };
             })
             .filter(Boolean) as ShippingOption[];
 
           if (normalized.length > 0) {
             setShippingOptions(normalized);
-            const first = normalized[0];
-            setShippingMethodId(String(first.id));
-            const fee = extractShippingFeeMinor(first);
+            const matched =
+              normalized.find((opt) =>
+                String(opt.name || "")
+                  .toLowerCase()
+                  .includes(effectiveCity.toLowerCase())
+              ) || normalized[0];
+
+            const selectedIdStr = String(matched.id);
+            setShippingMethodId(selectedIdStr);
+            const fee = extractShippingFeeMinor(matched);
+            if (typeof fee === "number") {
+              setShippingChargeMinor(fee);
+            }
+
+            await fetchCheckoutQuote({
+              methodIdStr: selectedIdStr,
+              coupon: couponApplied ? couponCode : undefined,
+              postalVal: effectivePostal,
+              cityVal: effectiveCity,
+              regionVal: effectiveRegion,
+              areaVal: effectiveArea,
+              tokenOverride: token,
+            });
+            return;
+          }
+        }
+
+        if (areasList.length > 0) {
+          const areaOptions: ShippingOption[] = areasList
+            .map((area, idx) => {
+              const id = extractShippingMethodId(area);
+              if (id === undefined) return null;
+              const fee = extractShippingFeeMinor(area);
+              const labelParts = [
+                area?.name,
+                area?.area,
+                area?.city,
+                area?.postal_prefix ? `(${area.postal_prefix})` : "",
+              ].filter(Boolean);
+              const baseLabel =
+                labelParts.length > 0
+                  ? labelParts.join(" - ")
+                  : `Shipping Area #${idx + 1}`;
+              const displayLabel =
+                typeof fee === "number" && !String(baseLabel).includes("৳")
+                  ? `${baseLabel} - ৳${(fee / 100).toFixed(2)}`
+                  : String(baseLabel);
+
+              return {
+                ...area,
+                id,
+                name: displayLabel,
+                feeMinor: fee,
+              };
+            })
+            .filter(Boolean) as ShippingOption[];
+
+          if (areaOptions.length > 0) {
+            setShippingOptions(areaOptions);
+            const selectedIdStr = String(areaOptions[0].id);
+            setShippingMethodId(selectedIdStr);
+            const fee = extractShippingFeeMinor(areaOptions[0]);
             if (typeof fee === "number") {
               setShippingChargeMinor(fee);
             }
@@ -158,60 +452,14 @@ export default function CheckoutPage() {
           }
         }
 
-        // 2. Fallback: GET /shipping/areas
-        const areasRes = await fetch(`${API_BASE}/shipping/areas`, {
-          method: "GET",
-          headers: { Accept: "application/json" },
-          cache: "no-store",
-        });
-
-        if (areasRes.ok) {
-          const areasJson = await areasRes.json().catch(() => ({}));
-          const areas: any[] = Array.isArray(areasJson?.data)
-            ? areasJson.data
-            : Array.isArray(areasJson)
-            ? areasJson
-            : [];
-
-          const areaOptions: ShippingOption[] = areas
-            .map((area) => {
-              const id = extractShippingMethodId(area);
-              if (id === undefined) return null;
-              return {
-                ...area,
-                id,
-                name:
-                  area?.name ||
-                  area?.title ||
-                  area?.city ||
-                  `Shipping Area #${id}`,
-              };
-            })
-            .filter(Boolean) as ShippingOption[];
-
-          if (areaOptions.length > 0) {
-            setShippingOptions(areaOptions);
-            const matched =
-              areaOptions.find((opt) =>
-                String(opt.name || "")
-                  .toLowerCase()
-                  .includes(cityVal.toLowerCase())
-              ) || areaOptions[0];
-
-            setShippingMethodId(String(matched.id));
-            const fee = extractShippingFeeMinor(matched);
-            if (typeof fee === "number") {
-              setShippingChargeMinor(fee);
-            }
-          }
-        }
+        setShippingOptions([]);
+        setServerTotalMinor(null);
+        setShippingChargeMinor(cityVal.toLowerCase() === "dhaka" ? 6000 : 12000);
       } catch (err) {
         console.error("Failed to load shipping methods:", err);
-      } finally {
-        setShippingLoading(false);
       }
     },
-    []
+    [couponApplied, couponCode, fetchCheckoutQuote, getRequestHeaders]
   );
 
   useEffect(() => {
@@ -221,18 +469,31 @@ export default function CheckoutPage() {
   }, [fetchCart, items.length]);
 
   useEffect(() => {
-    resolveShippingData(formData.city, formData.zipCode, guestToken);
-  }, [formData.city, formData.zipCode, guestToken, resolveShippingData]);
+    resolveShippingData(
+      formData.city,
+      formData.zipCode,
+      formData.area,
+      guestToken
+    );
+  }, [
+    formData.city,
+    formData.zipCode,
+    formData.area,
+    guestToken,
+    resolveShippingData,
+  ]);
 
-  // Store-এ item.price টাকায় (BDT) সংরক্ষিত আছে; API-তে minor unit (পয়সা)-এ পাঠাতে * 100
   const subtotalMinor = items.reduce(
-    (acc, item) => acc + Math.round(item.price * 100) * item.quantity,
+    (acc, item) =>
+      acc + Math.round(Number(item.price || 0) * 100) * Number(item.quantity || 1),
     0
   );
-  const finalTotalMinor = Math.max(
+  const calculatedTotalMinor = Math.max(
     0,
     subtotalMinor + shippingChargeMinor - discountMinor
   );
+  const finalTotalMinor =
+    typeof serverTotalMinor === "number" ? serverTotalMinor : calculatedTotalMinor;
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -247,67 +508,83 @@ export default function CheckoutPage() {
     }
   };
 
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim();
+    if (!code) return;
+
+    await fetchCheckoutQuote({
+      methodIdStr: shippingMethodId,
+      coupon: code,
+      postalVal: formData.zipCode,
+      cityVal: formData.city,
+      regionVal: formData.area,
+      areaVal: formData.area,
+      showAlertOnCouponError: true,
+    });
+  };
+
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
 
     if (items.length === 0) {
       alert("Your cart is empty.");
       return;
     }
 
-    if (!shippingMethodId.trim()) {
-      alert(
-        "Shipping method ID could not be loaded from the server. Please check shipping methods or enter a valid Shipping Method ID."
-      );
-      return;
-    }
-
     setLoading(true);
 
     try {
-      const numericOrStringMethodId = /^\d+$/.test(shippingMethodId.trim())
-        ? Number(shippingMethodId.trim())
-        : shippingMethodId.trim();
-
-      const authToken =
-        typeof window !== "undefined"
-          ? localStorage.getItem("auth_token") || localStorage.getItem("token")
-          : null;
+      const matchedArea = shippingAreas[0];
+      const effectivePostal = (
+        formData.zipCode.trim() ||
+        matchedArea?.postal_code ||
+        matchedArea?.postal_prefix ||
+        "1200"
+      ).trim();
 
       const payload: Record<string, any> = {
-        idempotency_key: crypto.randomUUID(),
-        recipient_name: formData.name.trim(),
-        line1: formData.address.trim(),
+        idempotency_key:
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `order-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        recipient_name: formData.name.trim() || "Customer",
+        line1: formData.address.trim() || "Dhaka",
         country_code: "BD",
-        city: formData.city,
-        region: formData.area.trim() || formData.city,
-        postal_code: formData.zipCode.trim() || undefined,
-        shipping_method_id: numericOrStringMethodId,
+        city: formData.city || "Dhaka",
+        region:
+          formData.area.trim() || matchedArea?.region_code || formData.city || "Dhaka",
+        ...(formData.area.trim() || matchedArea?.area
+          ? { area: formData.area.trim() || matchedArea?.area }
+          : {}),
+        postal_code: effectivePostal,
+        shipping_method_id: parseMethodIdForApi(shippingMethodId),
         payment_method: formData.paymentMethod,
-        guest_email: formData.email.trim() || undefined,
-        phone: formData.phone.trim(),
-        coupon_code:
-          couponApplied && couponCode.trim() ? couponCode.trim() : undefined,
-        notes: formData.orderNote.trim() || undefined,
+        ...(formData.email.trim() ? { guest_email: formData.email.trim() } : {}),
+        ...(formData.phone.trim() ? { phone: formData.phone.trim() } : {}),
+        ...(couponApplied && couponCode.trim()
+          ? { coupon_code: couponCode.trim() }
+          : {}),
+        ...(formData.orderNote.trim() ? { notes: formData.orderNote.trim() } : {}),
         ...(formData.paymentMethod === "bkash" && formData.bkashNumber.trim()
           ? { bkash_number: formData.bkashNumber.trim() }
           : {}),
       };
 
-      const headers: HeadersInit = {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...(guestToken ? { "X-Guest-Cart-Token": guestToken } : {}),
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      };
-
-      const res = await fetch(`${API_BASE}/checkout/place`, {
+      const res = await fetch("/api/v1/checkout/place", {
         method: "POST",
-        headers,
+        headers: getRequestHeaders(),
         body: JSON.stringify(payload),
       });
 
       const data = await res.json().catch(() => ({}));
+
+      if (res.status === 429) {
+        throw new Error(
+          data?.message ||
+            "Too many requests. Please wait 1 minute and try placing the order again."
+        );
+      }
 
       if (!res.ok) {
         const validationErrors = data?.errors
@@ -389,14 +666,13 @@ export default function CheckoutPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5 block">
-                  Full Name <span className="text-red-500">*</span>
+                  Full Name
                 </label>
                 <div className="relative">
                   <User className="absolute left-3.5 top-3.5 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     name="name"
-                    required
                     value={formData.name}
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-transparent focus:ring-2 focus:ring-[#f76b1c] outline-none text-sm transition-all"
@@ -406,14 +682,13 @@ export default function CheckoutPage() {
 
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5 block">
-                  Phone Number <span className="text-red-500">*</span>
+                  Phone Number
                 </label>
                 <div className="relative">
                   <Phone className="absolute left-3.5 top-3.5 h-4 w-4 text-gray-400" />
                   <input
                     type="tel"
                     name="phone"
-                    required
                     value={formData.phone}
                     onChange={handleChange}
                     className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-transparent focus:ring-2 focus:ring-[#f76b1c] outline-none text-sm transition-all"
@@ -439,11 +714,10 @@ export default function CheckoutPage() {
 
               <div className="md:col-span-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5 block">
-                  Delivery Address <span className="text-red-500">*</span>
+                  Delivery Address
                 </label>
                 <textarea
                   name="address"
-                  required
                   rows={3}
                   value={formData.address}
                   onChange={handleChange}
@@ -453,7 +727,7 @@ export default function CheckoutPage() {
 
               <div>
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5 block">
-                  City / Region <span className="text-red-500">*</span>
+                  City / Region
                 </label>
                 <select
                   name="city"
@@ -479,10 +753,10 @@ export default function CheckoutPage() {
                 />
               </div>
 
-              {shippingOptions.length > 0 ? (
+              {shippingOptions.length > 0 && (
                 <div className="md:col-span-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5 block">
-                    Shipping Method <span className="text-red-500">*</span>
+                    Shipping Method
                   </label>
                   <select
                     value={shippingMethodId}
@@ -496,6 +770,14 @@ export default function CheckoutPage() {
                       if (typeof fee === "number") {
                         setShippingChargeMinor(fee);
                       }
+                      fetchCheckoutQuote({
+                        methodIdStr: chosenId,
+                        coupon: couponApplied ? couponCode : undefined,
+                        postalVal: formData.zipCode,
+                        cityVal: formData.city,
+                        regionVal: formData.area,
+                        areaVal: formData.area,
+                      });
                     }}
                     className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 focus:ring-2 focus:ring-[#f76b1c] outline-none text-sm transition-all cursor-pointer"
                   >
@@ -505,20 +787,6 @@ export default function CheckoutPage() {
                       </option>
                     ))}
                   </select>
-                </div>
-              ) : (
-                <div className="md:col-span-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400 mb-1.5 block">
-                    Shipping Method ID{" "}
-                    {shippingLoading ? "(Loading...)" : "(Required by API)"}
-                  </label>
-                  <input
-                    type="text"
-                    value={shippingMethodId}
-                    onChange={(e) => setShippingMethodId(e.target.value)}
-                    placeholder="Enter valid shipping method ID from backend"
-                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-transparent focus:ring-2 focus:ring-[#f76b1c] outline-none text-sm transition-all"
-                  />
                 </div>
               )}
             </div>
@@ -725,6 +993,7 @@ export default function CheckoutPage() {
                       src={item.image || "/images/product-not-found.webp"}
                       alt={item.name}
                       fill
+                      sizes="56px"
                       className="object-contain p-1"
                     />
                   </div>
@@ -750,20 +1019,31 @@ export default function CheckoutPage() {
                     type="text"
                     placeholder="Coupon code"
                     value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
+                    onChange={(e) => {
+                      setCouponCode(e.target.value);
+                      if (couponApplied) {
+                        setCouponApplied(false);
+                        setDiscountMinor(0);
+                        setServerTotalMinor(null);
+                      }
+                    }}
                     className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs bg-transparent uppercase outline-none focus:ring-1 focus:ring-[#f76b1c]"
                   />
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (couponCode.trim()) setCouponApplied(true);
-                  }}
-                  className="bg-gray-900 dark:bg-gray-800 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-gray-800 transition-colors cursor-pointer"
+                  disabled={quoteLoading}
+                  onClick={handleApplyCoupon}
+                  className="bg-gray-900 dark:bg-gray-800 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-gray-800 disabled:opacity-60 transition-colors cursor-pointer"
                 >
-                  Apply
+                  {quoteLoading ? "..." : "Apply"}
                 </button>
               </div>
+              {couponApplied && couponCode.trim() && (
+                <p className="text-xs text-green-600 mt-1.5 font-medium">
+                  Coupon &ldquo;{couponCode.trim().toUpperCase()}&rdquo; applied.
+                </p>
+              )}
             </div>
 
             {/* Totals */}
@@ -798,7 +1078,7 @@ export default function CheckoutPage() {
 
             <button
               type="submit"
-              disabled={loading || shippingLoading}
+              disabled={loading || quoteLoading}
               className="w-full bg-[#f76b1c] hover:bg-[#e05a12] disabled:opacity-70 text-white py-3.5 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-md cursor-pointer text-sm md:text-base"
             >
               {loading ? (

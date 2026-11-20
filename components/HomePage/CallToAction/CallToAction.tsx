@@ -60,9 +60,9 @@ export const CallToAction = () => {
                     <div className="relative z-10 w-56 h-56 rounded-full overflow-visible border-4 border-white/20 shadow-2xl bg-white/10 backdrop-blur-md flex items-center justify-center animate-float">
                         <div className="w-full h-full rounded-full overflow-hidden">
                             <img
-                                src="https://cdn.ghorerbazar.com/productImages/YPsni1793513651-light-1000x1000.jpg"
+                                src="images/banner-4-removebg-preview.png"
                                 alt="Product"
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain"
                             />
                         </div>
                         <div className="absolute -top-2 -right-2 z-20 bg-yellow-400 text-emerald-900 text-xs font-extrabold px-3 py-1 rounded-full shadow-md rotate-12 border-2 border-white">

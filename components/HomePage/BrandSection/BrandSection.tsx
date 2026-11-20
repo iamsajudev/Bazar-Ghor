@@ -1,13 +1,49 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useBrands } from "@/hook/useBrands";
 
-const PLACEHOLDER_LOGO = "/images/logo-main.png"; // public/images-এ একটি ডিফল্ট লোগো রাখুন
+const PLACEHOLDER_LOGO = "/images/logo-main.png";
+
+function BrandCardSkeleton() {
+    return (
+        <div className="flex-[0_0_33.33%] sm:flex-[0_0_25%] md:flex-[0_0_20%] lg:flex-[0_0_14.28%] pl-3 md:pl-4 min-w-0">
+            <div className="flex items-center justify-center p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 h-24">
+                <div className="w-20 h-10 rounded-lg bg-gray-200/80 dark:bg-gray-800" />
+            </div>
+        </div>
+    );
+}
+
+function BrandSectionSkeleton() {
+    return (
+        <section className="mb-14 mt-10 animate-pulse" aria-hidden="true">
+            <div className="flex items-end justify-between mb-6">
+                <div>
+                    <div className="h-3 w-24 rounded bg-green-100 dark:bg-green-900/40 mb-2" />
+                    <div className="h-7 w-36 md:w-44 rounded-lg bg-gray-200 dark:bg-gray-800" />
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-xl bg-gray-200 dark:bg-gray-800" />
+                    <div className="h-9 w-9 rounded-xl bg-gray-200 dark:bg-gray-800" />
+                </div>
+            </div>
+
+            <div className="overflow-hidden px-1 py-2">
+                <div className="flex -ml-3 md:-ml-4">
+                    {Array.from({ length: 7 }).map((_, idx) => (
+                        <BrandCardSkeleton key={idx} />
+                    ))}
+                </div>
+            </div>
+        </section>
+    );
+}
 
 export const BrandSection = () => {
     const { brands, isLoading, error } = useBrands();
@@ -20,28 +56,20 @@ export const BrandSection = () => {
     const scrollPrev = useCallback(() => emblaApi && emblaApi.scrollPrev(), [emblaApi]);
     const scrollNext = useCallback(() => emblaApi && emblaApi.scrollNext(), [emblaApi]);
 
-    // ✅ ডাটা পরে এলে Embla-কে নতুন করে হিসাব করাতে হবে
     useEffect(() => {
         if (emblaApi) emblaApi.reInit();
     }, [emblaApi, brands]);
 
-    // লোডিং স্টেট
     if (isLoading) {
-        return (
-            <section className="mb-14 mt-10 flex justify-center items-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-green-600" />
-            </section>
-        );
+        return <BrandSectionSkeleton />;
     }
 
-    // এরর বা খালি হলে সেকশনটাই দেখাবো না (হোমপেজে খালি ব্র্যান্ড সেকশনের দরকার নেই)
     if (error || brands.length === 0) {
         return null;
     }
 
     return (
         <section className="mb-14 mt-10">
-            {/* Section Header */}
             <div className="flex items-end justify-between mb-6">
                 <div>
                     <span className="text-xs font-bold uppercase tracking-wider text-green-600 dark:text-green-400">
@@ -52,9 +80,9 @@ export const BrandSection = () => {
                     </h2>
                 </div>
 
-                {/* Navigation Controls */}
                 <div className="flex items-center gap-2">
                     <button
+                        type="button"
                         onClick={scrollPrev}
                         aria-label="Previous brands"
                         className="h-9 w-9 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all cursor-pointer"
@@ -62,6 +90,7 @@ export const BrandSection = () => {
                         <ChevronLeft className="h-4 w-4" />
                     </button>
                     <button
+                        type="button"
                         onClick={scrollNext}
                         aria-label="Next brands"
                         className="h-9 w-9 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all cursor-pointer"
@@ -71,12 +100,14 @@ export const BrandSection = () => {
                 </div>
             </div>
 
-            {/* Carousel Viewport */}
             <div className="overflow-hidden px-1 py-2" ref={emblaRef}>
                 <div className="flex -ml-3 md:-ml-4 touch-pan-y">
                     {brands.map((brand) => {
                         const logoUrl =
-                            brand.logo_url || brand.thumbnail_url || brand.icon_url || PLACEHOLDER_LOGO;
+                            brand.logo_url ||
+                            brand.thumbnail_url ||
+                            brand.icon_url ||
+                            PLACEHOLDER_LOGO;
 
                         return (
                             <div
@@ -94,7 +125,7 @@ export const BrandSection = () => {
                                         className="w-full h-full object-contain grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500 ease-out opacity-70 group-hover:opacity-100"
                                         onError={(e) => {
                                             const img = e.currentTarget;
-                                            if (img.dataset.fallbackApplied) return; // prevent infinite loop
+                                            if (img.dataset.fallbackApplied) return;
                                             img.dataset.fallbackApplied = "true";
                                             img.src = PLACEHOLDER_LOGO;
                                         }}

@@ -1,14 +1,22 @@
 "use client";
 
-import { ShoppingCart, ArrowRight, Eye, Heart, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import {
+  ShoppingCart,
+  ArrowRight,
+  Eye,
+  Heart,
+  CheckCircle2,
+  XCircle,
+  Sparkles,
+} from "lucide-react";
 import { useCartStore } from "@/store/useCartStore";
 import { useWishlistStore } from "@/store/useWishlistStore";
-import { useRouter } from "next/navigation";
-import { useState, useRef } from "react";
 import { ProductQuickViewModal } from "./ProductQuickViewModal";
 import { flyToCart } from "@/utils/flyToCart";
 
-interface ProductCardProps {
+export interface ProductCardProps {
   id: number;
   title: string;
   price: number;
@@ -16,6 +24,32 @@ interface ProductCardProps {
   image: string;
   slug?: string;
   variantId?: number | null;
+  brand?: string;
+  inStock?: boolean;
+  isFeatured?: boolean;
+  currencySymbol?: string;
+}
+
+const FALLBACK_IMAGE = "/images/product-not-found.webp";
+
+function toSafeNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function cleanText(text?: string | null): string {
+  if (!text) return "";
+  return text
+    .replace(/<[^>]*>?/gm, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 }
 
 export function ProductCard({
@@ -26,22 +60,44 @@ export function ProductCard({
   image,
   slug,
   variantId,
+  brand,
+  inStock = true,
+  isFeatured = false,
+  currencySymbol = "$",
 }: ProductCardProps) {
-  const { addItem, toggleCart } = useCartStore();
-  const {
-    addItem: addWishlistItem,
-    removeItem: removeWishlistItem,
-    isInWishlist,
-  } = useWishlistStore();
+  const addItem = useCartStore((state) => state.addItem);
+  const toggleCart = useCartStore((state) => state.toggleCart);
+
+  const addWishlistItem = useWishlistStore((state) => state.addItem);
+  const removeWishlistItem = useWishlistStore((state) => state.removeItem);
+  const isInWishlist = useWishlistStore((state) => state.isInWishlist);
+  const isHydrated = useWishlistStore((state) => state.isHydrated);
+
   const router = useRouter();
-
-  const isWishlisted = isInWishlist(id);
-
-  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
   const imageRef = useRef<HTMLDivElement>(null);
 
+  const [mounted, setMounted] = useState(false);
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isWishlisted = mounted && isHydrated ? isInWishlist(id) : false;
   const resolvedVariantId = variantId ?? id;
+
+  const safePrice = toSafeNumber(price, 0);
+  const safeOriginalPrice =
+    originalPrice !== undefined ? toSafeNumber(originalPrice, 0) : undefined;
+  const safeImage = image?.trim() || FALLBACK_IMAGE;
+  const cleanTitle = cleanText(title) || "Untitled Product";
+  const cleanBrand = cleanText(brand);
+
+  const discountPercentage =
+    safeOriginalPrice && safeOriginalPrice > safePrice && safeOriginalPrice > 0
+      ? Math.round(((safeOriginalPrice - safePrice) / safeOriginalPrice) * 100)
+      : 0;
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -55,14 +111,15 @@ export function ProductCard({
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!inStock) return;
     if (imageRef.current) {
-      flyToCart(image, imageRef.current);
+      flyToCart(safeImage, imageRef.current);
     }
     await addItem({
       id,
-      title,
-      price,
-      image,
+      title: cleanTitle,
+      price: safePrice,
+      image: safeImage,
       variantId: resolvedVariantId,
       quantity: 1,
     });
@@ -73,11 +130,12 @@ export function ProductCard({
 
   const handleBuyNow = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!inStock) return;
     await addItem({
       id,
-      title,
-      price,
-      image,
+      title: cleanTitle,
+      price: safePrice,
+      image: safeImage,
       variantId: resolvedVariantId,
       quantity: 1,
     });
@@ -86,16 +144,20 @@ export function ProductCard({
 
   const handleWishlist = (e: React.MouseEvent) => {
     e.stopPropagation();
-
     if (isWishlisted) {
       removeWishlistItem(id);
-      showToast(`${title} removed from wishlist!`);
+      showToast(`${cleanTitle} removed from wishlist!`);
     } else {
-      addWishlistItem({ id, title, price, image });
+      addWishlistItem({
+        id,
+        title: cleanTitle,
+        price: safePrice,
+        image: safeImage,
+      });
       if (imageRef.current) {
-        flyToCart(image, imageRef.current, "wishlist-icon-target");
+        flyToCart(safeImage, imageRef.current, "wishlist-icon-target");
       }
-      showToast(`${title} added to wishlist!`);
+      showToast(`${cleanTitle} added to wishlist!`);
     }
   };
 
@@ -104,94 +166,152 @@ export function ProductCard({
     setIsQuickViewOpen(true);
   };
 
-  const discountAmount = originalPrice ? originalPrice - price : 0;
-  const discountPercentage =
-    originalPrice && originalPrice > 0
-      ? Math.round((discountAmount / originalPrice) * 100)
-      : 0;
-
   return (
     <>
       <div
         onClick={handleCardClick}
-        className="group relative bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 hover:border-green-500/40 dark:hover:border-green-500/40 transition-all duration-300 overflow-hidden flex flex-col shadow-xs hover:shadow-xl cursor-pointer"
+        className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden group hover:shadow-lg hover:border-emerald-500/40 transition-all duration-300 cursor-pointer flex flex-col h-full p-3.5 sm:p-0"
       >
-        {discountPercentage > 0 && (
-          <span className="absolute top-3 left-3 z-10 bg-red-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-sm">
-            -{discountPercentage}%
-          </span>
-        )}
+        {/* Top-Left Badges */}
+        <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5 pointer-events-none">
+          {discountPercentage > 0 && (
+            <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+              -{discountPercentage}%
+            </span>
+          )}
+          {isFeatured && (
+            <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+              <Sparkles className="w-2.5 h-2.5" /> Featured
+            </span>
+          )}
+          {!inStock && (
+            <span className="bg-gray-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+              Out of Stock
+            </span>
+          )}
+        </div>
 
+        {/* Image Box */}
         <div
           ref={imageRef}
-          className="relative aspect-square overflow-hidden bg-gray-50 dark:bg-gray-800 p-4 flex items-center justify-center"
+          className="relative bg-gray-50 dark:bg-gray-800/40 rounded-xl overflow-hidden flex items-center justify-center shrink-0 w-full aspect-square mb-3"
         >
           <img
-            src={image}
-            alt={title}
-            className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500 ease-out"
+            src={safeImage}
+            alt={cleanTitle}
+            loading="lazy"
+            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 mix-blend-multiply dark:mix-blend-normal"
+            onError={(e) => {
+              const img = e.currentTarget;
+              if (img.dataset.fallbackApplied) return;
+              img.dataset.fallbackApplied = "true";
+              img.src = FALLBACK_IMAGE;
+            }}
           />
 
-          <div className="absolute top-3 right-3 flex flex-col gap-2 z-20 translate-x-12 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-300">
+          {/* Hover Quick Actions */}
+          <div className="absolute top-2 right-2 flex flex-col gap-1.5 transition-all duration-300 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 z-20">
             <button
               type="button"
               onClick={handleWishlist}
-              className={`w-9 h-9 flex items-center justify-center rounded-lg shadow-md transition-colors cursor-pointer ${isWishlisted
-                  ? "bg-red-500 text-white"
-                  : "bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-red-500 hover:text-white"
-                }`}
+              aria-label="Toggle wishlist"
+              className={`w-8 h-8 flex items-center justify-center rounded-full shadow-md transition-all cursor-pointer ${
+                isWishlisted
+                  ? "bg-rose-500 text-white"
+                  : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-200 hover:bg-rose-500 hover:text-white"
+              }`}
             >
-              <Heart className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
+              <Heart
+                className={`h-3.5 w-3.5 ${isWishlisted ? "fill-current" : ""}`}
+              />
             </button>
 
             <button
               type="button"
               onClick={handleQuickView}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 shadow-md hover:bg-green-600 hover:text-white transition-colors cursor-pointer"
+              aria-label="Quick view"
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-200 shadow-md hover:bg-emerald-600 hover:text-white transition-all cursor-pointer"
             >
-              <Eye className="h-4 w-4" />
+              <Eye className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
 
-        <div className="p-4 flex flex-col flex-1 justify-between">
+        {/* Card Details */}
+        <div className="flex flex-col flex-1 justify-between min-w-0 sm:p-4 pt-1">
           <div>
-            <h3 className="text-sm md:text-base font-semibold text-gray-800 dark:text-gray-100 line-clamp-2 mb-2.5 group-hover:text-green-600 dark:group-hover:text-green-400 transition-colors">
-              {title}
-            </h3>
-          </div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              {cleanBrand ? (
+                <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider truncate">
+                  {cleanBrand}
+                </p>
+              ) : (
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider truncate">
+                  Collection
+                </span>
+              )}
 
-          <div>
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-base md:text-lg font-extrabold text-[#f76b1c]">
-                ${price}
+              <span
+                className={`inline-flex items-center gap-1 text-[11px] font-semibold shrink-0 ${
+                  inStock
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-rose-500"
+                }`}
+              >
+                {inStock ? (
+                  <>
+                    <CheckCircle2 className="h-3 w-3" />
+                    In Stock
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-3 w-3" />
+                    Sold Out
+                  </>
+                )}
               </span>
-              {originalPrice && (
-                <span className="text-xs md:text-sm text-gray-400 line-through font-medium">
-                  ${originalPrice}
+            </div>
+
+            <h3 className="font-bold text-sm sm:text-base text-gray-900 dark:text-gray-100 group-hover:text-[#f76b1c] transition-colors line-clamp-1 mb-2">
+              {cleanTitle}
+            </h3>
+
+            {/* Price */}
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="text-lg sm:text-xl font-black text-[#f76b1c]">
+                {currencySymbol}
+                {safePrice}
+              </span>
+              {safeOriginalPrice !== undefined && safeOriginalPrice > safePrice && (
+                <span className="text-xs sm:text-sm text-gray-400 line-through">
+                  {currencySymbol}
+                  {safeOriginalPrice}
                 </span>
               )}
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handleAddToCart}
-                className="flex items-center justify-center gap-1.5 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 py-2 px-2.5 rounded-xl hover:border-green-600 hover:text-green-600 dark:hover:border-green-500 dark:hover:text-green-400 transition-all text-xs font-bold cursor-pointer"
-              >
-                <ShoppingCart className="h-3.5 w-3.5" />
-                <span>Add</span>
-              </button>
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 mt-auto pt-2.5 border-t border-gray-100 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              disabled={!inStock}
+              className="flex-1 px-2.5 flex items-center justify-center gap-1.5 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 py-2 rounded-xl hover:border-[#f76b1c] hover:text-[#f76b1c] transition-all text-xs font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+              <span>Cart</span>
+            </button>
 
-              <button
-                type="button"
-                onClick={handleBuyNow}
-                className="flex items-center justify-center gap-1.5 bg-green-600 text-white py-2 px-2.5 rounded-xl hover:bg-green-700 transition-all text-xs font-bold cursor-pointer shadow-xs hover:shadow-md"
-              >
-                <span>Buy</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleBuyNow}
+              disabled={!inStock}
+              className="flex-1 px-2.5 flex items-center justify-center gap-1 bg-[#f76b1c] text-white py-2 rounded-xl hover:bg-[#e05a12] transition-all text-xs font-bold cursor-pointer shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>Buy Now</span>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+            </button>
           </div>
         </div>
       </div>
@@ -199,7 +319,13 @@ export function ProductCard({
       <ProductQuickViewModal
         isOpen={isQuickViewOpen}
         onClose={() => setIsQuickViewOpen(false)}
-        product={{ id, title, price, originalPrice, image }}
+        product={{
+          id,
+          title: cleanTitle,
+          price: safePrice,
+          originalPrice: safeOriginalPrice,
+          image: safeImage,
+        }}
       />
 
       {toastMessage && (

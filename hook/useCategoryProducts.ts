@@ -28,6 +28,7 @@ export interface ProductQuery {
     sort?: ProductSort;
     page?: number;
     perPage?: number;        // ডক: <= 50
+    brandSlug?: string;
 }
 
 interface ProductsApiResponse {

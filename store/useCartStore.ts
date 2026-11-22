@@ -1,6 +1,8 @@
 // store/useCartStore.ts
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+"use client";
+
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 export interface ApiCartItem {
   id?: number;
@@ -36,7 +38,7 @@ interface CartStore {
   items: CartItem[];
   isOpen: boolean;
   guestToken: string | null;
-  priceMapByVariant: Record<number, number>; // variantId -> price in Taka
+  priceMapByVariant: Record<number, number>;
 
   fetchCart: () => Promise<void>;
   addItem: (item: AddItemInput, isRetry?: boolean) => Promise<boolean>;
@@ -50,20 +52,20 @@ interface CartStore {
 const getBaseUrl = () => {
   const raw =
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    'https://ecommerce.flixzaglobal.us/api/v1';
-  return raw.replace(/\/+$/, '');
+    "https://ecommerce.flixzaglobal.us/api/v1";
+  return raw.replace(/\/+$/, "");
 };
 
 const getHeaders = (token?: string | null): HeadersInit => ({
-  'Content-Type': 'application/json',
-  Accept: 'application/json',
-  ...(token ? { 'X-Guest-Cart-Token': token } : {}),
+  "Content-Type": "application/json",
+  Accept: "application/json",
+  ...(token ? { "X-Guest-Cart-Token": token } : {}),
 });
 
 const extractToken = (res: Response, json: any): string | null => {
   return (
-    res.headers.get('X-Guest-Cart-Token') ||
-    res.headers.get('x-guest-cart-token') ||
+    res.headers.get("X-Guest-Cart-Token") ||
+    res.headers.get("x-guest-cart-token") ||
     json?.guest_cart_token ||
     json?.guest_token ||
     json?.token ||
@@ -84,25 +86,31 @@ const extractApiPriceTaka = (raw: any): number | null => {
   ];
 
   for (const val of minorCandidates) {
-    if (typeof val === 'number' && !Number.isNaN(val) && val > 0) {
+    if (typeof val === "number" && !Number.isNaN(val) && val > 0) {
       return val / 100;
     }
-    if (typeof val === 'string' && val.trim() !== '' && !Number.isNaN(Number(val)) && Number(val) > 0) {
+    if (
+      typeof val === "string" &&
+      val.trim() !== "" &&
+      !Number.isNaN(Number(val)) &&
+      Number(val) > 0
+    ) {
       return Number(val) / 100;
     }
   }
 
-  const directCandidates = [
-    raw?.unit_price,
-    raw?.price,
-    raw?.variant?.price,
-  ];
+  const directCandidates = [raw?.unit_price, raw?.price, raw?.variant?.price];
 
   for (const val of directCandidates) {
-    if (typeof val === 'number' && !Number.isNaN(val) && val > 0) {
+    if (typeof val === "number" && !Number.isNaN(val) && val > 0) {
       return val;
     }
-    if (typeof val === 'string' && val.trim() !== '' && !Number.isNaN(Number(val)) && Number(val) > 0) {
+    if (
+      typeof val === "string" &&
+      val.trim() !== "" &&
+      !Number.isNaN(Number(val)) &&
+      Number(val) > 0
+    ) {
       return Number(val);
     }
   }
@@ -123,8 +131,10 @@ const mapToUiItem = (
       image?: string;
     };
   }
-): CartItem => {
-  const variantId = Number(raw?.variant_id ?? raw?.variantId ?? context.fallback?.variantId ?? 0);
+): { item: CartItem; resolvedPriceTaka: number } => {
+  const variantId = Number(
+    raw?.variant_id ?? raw?.variantId ?? context.fallback?.variantId ?? 0
+  );
   const existing = context.existingItems.find((i) => i.variant_id === variantId);
 
   const apiPrice = extractApiPriceTaka(raw);
@@ -136,26 +146,29 @@ const mapToUiItem = (
     0;
 
   return {
-    id: raw?.id ?? existing?.id ?? context.fallback?.id ?? variantId,
-    variant_id: variantId,
-    name:
-      raw?.name ||
-      raw?.title ||
-      raw?.product?.name ||
-      context.fallback?.name ||
-      existing?.name ||
-      'Product',
-    price: resolvedPrice,
-    quantity: Number(raw?.quantity ?? 1),
-    image:
-      raw?.thumbnail_url ||
-      raw?.image_url ||
-      raw?.variant?.image_url ||
-      raw?.product?.thumbnail_url ||
-      raw?.product?.image_url ||
-      context.fallback?.image ||
-      existing?.image ||
-      '/images/product-not-found.webp',
+    resolvedPriceTaka: resolvedPrice,
+    item: {
+      id: raw?.id ?? existing?.id ?? context.fallback?.id ?? variantId,
+      variant_id: variantId,
+      name:
+        raw?.name ||
+        raw?.title ||
+        raw?.product?.name ||
+        context.fallback?.name ||
+        existing?.name ||
+        "Product",
+      price: resolvedPrice,
+      quantity: Number(raw?.quantity ?? 1),
+      image:
+        raw?.thumbnail_url ||
+        raw?.image_url ||
+        raw?.variant?.image_url ||
+        raw?.product?.thumbnail_url ||
+        raw?.product?.image_url ||
+        context.fallback?.image ||
+        existing?.image ||
+        "/images/product-not-found.webp",
+    },
   };
 };
 
@@ -172,9 +185,9 @@ export const useCartStore = create<CartStore>()(
           const { guestToken, priceMapByVariant, items: existingItems } = get();
 
           const res = await fetch(`${getBaseUrl()}/cart`, {
-            method: 'GET',
+            method: "GET",
             headers: getHeaders(guestToken),
-            cache: 'no-store',
+            cache: "no-store",
           });
 
           const json = await res.json().catch(() => ({}));
@@ -183,28 +196,37 @@ export const useCartStore = create<CartStore>()(
             set({ guestToken: token });
           }
 
-          if (res.status === 404) {
-            set({ items: [] });
+          if (res.status === 404 || res.status === 410) {
+            set({ items: [], guestToken: null });
             return;
           }
 
           if (!res.ok) {
-            throw new Error(`Failed to fetch cart (${res.status})`);
+            return;
           }
 
           const rawItems = json?.data?.items ?? json?.items ?? [];
+          const nextPriceMap: Record<number, number> = { ...priceMapByVariant };
+
           const uiItems: CartItem[] = Array.isArray(rawItems)
-            ? rawItems.map((item) =>
-                mapToUiItem(item, {
-                  priceMap: priceMapByVariant,
+            ? rawItems.map((raw) => {
+                const { item, resolvedPriceTaka } = mapToUiItem(raw, {
+                  priceMap: nextPriceMap,
                   existingItems,
-                })
-              )
+                });
+                if (item.variant_id && resolvedPriceTaka > 0) {
+                  nextPriceMap[item.variant_id] = resolvedPriceTaka;
+                }
+                return item;
+              })
             : [];
 
-          set({ items: uiItems });
+          set({
+            items: uiItems,
+            priceMapByVariant: nextPriceMap,
+          });
         } catch (error) {
-          console.error('Cart fetch error:', error);
+          console.warn("Cart fetch error:", error);
         }
       },
 
@@ -212,25 +234,37 @@ export const useCartStore = create<CartStore>()(
         { id, title, price, image, variantId, quantity = 1 },
         isRetry = false
       ) => {
-        try {
-          const priceTaka = price / 100;
+        const numericVariantId = Number(variantId);
+        const safeQty = Math.max(1, Number(quantity) || 1);
 
-          // আগে থেকেই এই variantId-এর প্রাইস ও ইমেজ ম্যাপে সেভ করে রাখছি
+        if (!numericVariantId || Number.isNaN(numericVariantId) || numericVariantId <= 0) {
+          console.error("Invalid variantId passed to addItem:", {
+            id,
+            title,
+            variantId,
+          });
+          alert("Product variant is missing or invalid.");
+          return false;
+        }
+
+        try {
+          const priceTaka = Number(price) > 0 ? Number(price) / 100 : 0;
+
           set((state) => ({
             priceMapByVariant: {
               ...state.priceMapByVariant,
-              ...(priceTaka > 0 ? { [variantId]: priceTaka } : {}),
+              ...(priceTaka > 0 ? { [numericVariantId]: priceTaka } : {}),
             },
           }));
 
           const { guestToken } = get();
 
           const res = await fetch(`${getBaseUrl()}/cart/items`, {
-            method: 'POST',
+            method: "POST",
             headers: getHeaders(guestToken),
             body: JSON.stringify({
-              variant_id: variantId,
-              quantity,
+              variant_id: numericVariantId,
+              quantity: safeQty,
             }),
           });
 
@@ -241,74 +275,88 @@ export const useCartStore = create<CartStore>()(
           }
 
           if (
-            res.status === 422 &&
             !isRetry &&
-            typeof json?.message === 'string' &&
-            json.message.toLowerCase().includes('guest cart')
+            guestToken &&
+            (res.status === 404 || res.status === 410 || res.status === 422)
           ) {
             set({ guestToken: null });
-            await get().fetchCart();
             return await get().addItem(
-              { id, title, price, image, variantId, quantity },
+              { id, title, price, image, variantId: numericVariantId, quantity: safeQty },
               true
             );
           }
 
           if (!res.ok) {
-            console.error('Add to cart API response:', res.status, json);
-            throw new Error(json?.message || `Add failed (${res.status})`);
+            const detail = json?.errors
+              ? Object.values(json.errors).flat().join(", ")
+              : json?.message || `Add failed (${res.status})`;
+            console.error("Add to cart API error:", res.status, detail, json);
+            alert(detail);
+            return false;
           }
 
           const { priceMapByVariant, items: existingItems } = get();
+          const nextPriceMap: Record<number, number> = { ...priceMapByVariant };
           const rawItemsList = json?.data?.items ?? json?.items;
 
           if (Array.isArray(rawItemsList) && rawItemsList.length > 0) {
-            const mappedList = rawItemsList.map((item) => {
-              const itemVariantId = Number(item?.variant_id ?? item?.variantId);
-              const isCurrentAdded = itemVariantId === variantId;
+            const mappedList = rawItemsList.map((raw) => {
+              const itemVariantId = Number(raw?.variant_id ?? raw?.variantId);
+              const isCurrentAdded = itemVariantId === numericVariantId;
 
-              return mapToUiItem(item, {
-                priceMap: priceMapByVariant,
+              const { item, resolvedPriceTaka } = mapToUiItem(raw, {
+                priceMap: nextPriceMap,
                 existingItems,
                 fallback: isCurrentAdded
                   ? {
                       id,
-                      variantId,
+                      variantId: numericVariantId,
                       name: title,
                       priceTaka: priceTaka > 0 ? priceTaka : undefined,
                       image,
                     }
                   : undefined,
               });
+
+              if (item.variant_id && resolvedPriceTaka > 0) {
+                nextPriceMap[item.variant_id] = resolvedPriceTaka;
+              }
+              return item;
             });
 
             set({
               items: mappedList,
+              priceMapByVariant: nextPriceMap,
               isOpen: true,
             });
             return true;
           }
 
-          const rawItem = json?.data?.item ??
+          const rawItem =
+            json?.data?.item ??
             json?.item ??
             json?.data ?? {
               id,
-              variant_id: variantId,
+              variant_id: numericVariantId,
               name: title,
-              quantity,
+              quantity: safeQty,
             };
 
-          const newItem = mapToUiItem(rawItem, {
-            priceMap: priceMapByVariant,
+          const { item: newItem, resolvedPriceTaka } = mapToUiItem(rawItem, {
+            priceMap: nextPriceMap,
             existingItems,
             fallback: {
               id,
-              variantId,
+              variantId: numericVariantId,
               name: title,
               priceTaka: priceTaka > 0 ? priceTaka : undefined,
               image,
             },
           });
+
+          if (newItem.variant_id && resolvedPriceTaka > 0) {
+            nextPriceMap[newItem.variant_id] = resolvedPriceTaka;
+          }
 
           set((state) => {
             const existingIndex = state.items.findIndex(
@@ -321,7 +369,7 @@ export const useCartStore = create<CartStore>()(
                 index === existingIndex
                   ? {
                       ...item,
-                      quantity: newItem.quantity || item.quantity + quantity,
+                      quantity: newItem.quantity || item.quantity + safeQty,
                       price: newItem.price || item.price,
                       image: newItem.image || item.image,
                     }
@@ -333,14 +381,15 @@ export const useCartStore = create<CartStore>()(
 
             return {
               items: updatedItems,
+              priceMapByVariant: nextPriceMap,
               isOpen: true,
             };
           });
 
           return true;
         } catch (error) {
-          console.error('Add to cart error:', error);
-          alert('Failed to add item to cart. Please try again.');
+          console.error("Add to cart network/runtime error:", error);
+          alert("Failed to add item to cart. Please try again.");
           return false;
         }
       },
@@ -349,7 +398,7 @@ export const useCartStore = create<CartStore>()(
         try {
           const { guestToken, priceMapByVariant, items: existingItems } = get();
           const res = await fetch(`${getBaseUrl()}/cart/items/${variantId}`, {
-            method: 'DELETE',
+            method: "DELETE",
             headers: getHeaders(guestToken),
           });
 
@@ -358,8 +407,12 @@ export const useCartStore = create<CartStore>()(
 
           if (Array.isArray(rawItemsList)) {
             set({
-              items: rawItemsList.map((item) =>
-                mapToUiItem(item, { priceMap: priceMapByVariant, existingItems })
+              items: rawItemsList.map(
+                (raw) =>
+                  mapToUiItem(raw, {
+                    priceMap: priceMapByVariant,
+                    existingItems,
+                  }).item
               ),
             });
             return;
@@ -369,7 +422,7 @@ export const useCartStore = create<CartStore>()(
             items: state.items.filter((i) => i.variant_id !== variantId),
           }));
         } catch (error) {
-          console.error('Remove error:', error);
+          console.warn("Remove error:", error);
         }
       },
 
@@ -382,7 +435,7 @@ export const useCartStore = create<CartStore>()(
           }
 
           const res = await fetch(`${getBaseUrl()}/cart/items/${variantId}`, {
-            method: 'PATCH',
+            method: "PATCH",
             headers: getHeaders(guestToken),
             body: JSON.stringify({ quantity }),
           });
@@ -392,8 +445,12 @@ export const useCartStore = create<CartStore>()(
 
           if (Array.isArray(rawItemsList)) {
             set({
-              items: rawItemsList.map((item) =>
-                mapToUiItem(item, { priceMap: priceMapByVariant, existingItems })
+              items: rawItemsList.map(
+                (raw) =>
+                  mapToUiItem(raw, {
+                    priceMap: priceMapByVariant,
+                    existingItems,
+                  }).item
               ),
             });
             return;
@@ -405,7 +462,7 @@ export const useCartStore = create<CartStore>()(
             ),
           }));
         } catch (error) {
-          console.error('Update qty error:', error);
+          console.warn("Update qty error:", error);
         }
       },
 
@@ -414,8 +471,18 @@ export const useCartStore = create<CartStore>()(
       clearCart: () => set({ items: [] }),
     }),
     {
-      name: 'cart-storage',
+      name: "cart-storage",
+      storage: createJSONStorage(() =>
+        typeof window !== "undefined"
+          ? window.localStorage
+          : {
+              getItem: () => null,
+              setItem: () => {},
+              removeItem: () => {},
+            }
+      ),
       partialize: (state) => ({
+        items: state.items,
         guestToken: state.guestToken,
         priceMapByVariant: state.priceMapByVariant,
       }),

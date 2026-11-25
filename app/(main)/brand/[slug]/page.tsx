@@ -1,6 +1,6 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { BrandClient } from "@/components/Brand/BrandClient";
-
 
 interface BrandDetail {
     id: number;
@@ -38,7 +38,24 @@ async function getBrand(slug: string): Promise<BrandDetail | null> {
     }
 }
 
-export default async function BrandPage({
+function BrandFallback() {
+    return (
+        <div
+            aria-hidden="true"
+            className="container mx-auto px-4 py-10 space-y-6 animate-pulse"
+        >
+            <div className="h-44 w-full rounded-2xl bg-gray-200 dark:bg-gray-800" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="h-60 rounded-xl bg-gray-200/80 dark:bg-gray-800/80" />
+                <div className="h-60 rounded-xl bg-gray-200/80 dark:bg-gray-800/80" />
+                <div className="h-60 rounded-xl bg-gray-200/80 dark:bg-gray-800/80" />
+                <div className="h-60 rounded-xl bg-gray-200/80 dark:bg-gray-800/80" />
+            </div>
+        </div>
+    );
+}
+
+async function BrandContent({
     params,
 }: {
     params: Promise<{ slug: string }>;
@@ -51,4 +68,16 @@ export default async function BrandPage({
     }
 
     return <BrandClient brand={brand} />;
+}
+
+export default function BrandPage({
+    params,
+}: {
+    params: Promise<{ slug: string }>;
+}) {
+    return (
+        <Suspense fallback={<BrandFallback />}>
+            <BrandContent params={params} />
+        </Suspense>
+    );
 }

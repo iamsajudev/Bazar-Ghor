@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "ecommerce.flixzaglobal.us",
+        hostname: "ecommerce.goflixza.com",
         port: "",
         pathname: "/**",
       },

@@ -17,7 +17,7 @@ function resolveApiBase(): string {
     const raw =
         process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
         process.env.NEXT_PUBLIC_API_URL?.trim() ||
-        "https://ecommerce.flixzaglobal.us/api/v1";
+        "https://ecommerce.goflixza.com/api/v1";
     const clean = raw.replace(/\/+$/, "");
     return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
 }

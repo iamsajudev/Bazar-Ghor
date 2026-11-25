@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Sparkles, ArrowRight } from "lucide-react";
 import { BestSellingProducts } from "@/components/HomePage/BestSellingProducts/BestSellingProducts";
@@ -9,6 +9,7 @@ import { CallToAction } from "@/components/HomePage/CallToAction/CallToAction";
 import { FullBgCTA } from "@/components/HomePage/CallToAction/FullBgCTA";
 import { FeaturedCategories } from "@/components/HomePage/Category/FeaturedCategories";
 import { CategoryProductSection } from "@/components/HomePage/CategoryProducts/CategoryProductSection";
+import { CategoryProductSliderSection } from "@/components/HomePage/CategoryProducts/CategoryProductSliderSection";
 import { HeroSlider } from "@/components/HomePage/HeroSection/HeroSlider";
 import {
     TopSellingCard,
@@ -42,6 +43,13 @@ export interface ApiBrand {
     slug: string;
 }
 
+export interface ApiCategory {
+    id: number;
+    parent_id?: number | null;
+    name: string;
+    slug: string;
+}
+
 export interface ApiProductItem {
     id: number;
     name: string;
@@ -59,22 +67,85 @@ export interface ApiProductItem {
     gallery?: ApiPrimaryImage[];
 }
 
-const DEFAULT_API_BASE = "https://ecommerce.flixzaglobal.us/api/v1";
+const DEFAULT_API_BASE = "https://ecommerce.goflixza.com/api/v1";
+const MIN_VISIBLE_CATEGORIES = 3;
+const MAX_VISIBLE_CATEGORIES = 4;
 
-function getProductsApiUrl(): string {
+function getApiBaseUrl(): string {
     const raw =
         process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
         process.env.NEXT_PUBLIC_API_URL?.trim() ||
         DEFAULT_API_BASE;
     const clean = raw.replace(/\/+$/, "");
-    if (clean.endsWith("/api/v1")) {
-        return `${clean}/products?per_page=20&page=1`;
-    }
-    return `${clean}/api/v1/products?per_page=20&page=1`;
+    return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
+}
+
+function getProductsApiUrl(): string {
+    return `${getApiBaseUrl()}/products?per_page=20&page=1`;
+}
+
+function getCategoriesApiUrl(): string {
+    return `${getApiBaseUrl()}/categories?per_page=30&page=1`;
 }
 
 function isFeaturedFlag(val: unknown): boolean {
     return val === true || val === 1 || val === "1" || val === "true";
+}
+
+function shuffleArray<T>(items: T[]): T[] {
+    const copy = [...items];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+}
+
+function mergeCategories(
+    apiCategories: ApiCategory[],
+    products: ApiProductItem[]
+): ApiCategory[] {
+    const map = new Map<string, ApiCategory>();
+
+    for (const cat of apiCategories) {
+        if (cat?.slug && cat?.name) {
+            map.set(cat.slug, cat);
+        }
+    }
+
+    for (const prod of products) {
+        if (Array.isArray(prod.categories)) {
+            for (const cat of prod.categories) {
+                if (cat?.slug && cat?.name && !map.has(cat.slug)) {
+                    map.set(cat.slug, {
+                        id: cat.id,
+                        name: cat.name,
+                        slug: cat.slug,
+                    });
+                }
+            }
+        }
+    }
+
+    return Array.from(map.values());
+}
+
+function productBelongsToCategory(
+    product: ApiProductItem,
+    category: ApiCategory
+): boolean {
+    if (
+        typeof product.primary_category_id === "number" &&
+        product.primary_category_id === category.id
+    ) {
+        return true;
+    }
+    if (Array.isArray(product.categories)) {
+        return product.categories.some(
+            (c) => c.id === category.id || c.slug === category.slug
+        );
+    }
+    return false;
 }
 
 function mapProductToCard(
@@ -98,8 +169,8 @@ function mapProductToCard(
 
     const sortedGallery = Array.isArray(product.gallery)
         ? [...product.gallery].sort(
-              (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
-          )
+            (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+        )
         : [];
 
     const image =
@@ -131,52 +202,101 @@ function mapProductToCard(
 // ==========================================
 export default function HomePage() {
     const [products, setProducts] = useState<ApiProductItem[]>([]);
+    const [categories, setCategories] = useState<ApiCategory[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let active = true;
 
-        async function loadProducts() {
+        async function loadHomeData() {
             setLoading(true);
             try {
-                const url = getProductsApiUrl();
-                const res = await fetch(url, { cache: "no-store" });
-                if (!res.ok) {
-                    if (active) setProducts([]);
-                    return;
+                const [prodRes, catRes] = await Promise.all([
+                    fetch(getProductsApiUrl(), { cache: "no-store" }),
+                    fetch(getCategoriesApiUrl(), { cache: "no-store" }),
+                ]);
+
+                if (!active) return;
+
+                let loadedProducts: ApiProductItem[] = [];
+                if (prodRes.ok) {
+                    const prodJson = await prodRes.json();
+                    loadedProducts = Array.isArray(prodJson?.data)
+                        ? prodJson.data
+                        : Array.isArray(prodJson?.data?.data)
+                            ? prodJson.data.data
+                            : [];
                 }
 
-                const json = await res.json();
-                const list: ApiProductItem[] = Array.isArray(json?.data)
-                    ? json.data
-                    : Array.isArray(json?.data?.data)
-                    ? json.data.data
-                    : json?.data && typeof json.data === "object"
-                    ? [json.data]
-                    : [];
-
-                if (active) {
-                    setProducts(list);
+                let loadedCategories: ApiCategory[] = [];
+                if (catRes.ok) {
+                    const catJson = await catRes.json();
+                    loadedCategories = Array.isArray(catJson?.data)
+                        ? catJson.data
+                        : Array.isArray(catJson?.data?.data)
+                            ? catJson.data.data
+                            : [];
                 }
+
+                setProducts(loadedProducts);
+                setCategories(mergeCategories(loadedCategories, loadedProducts));
             } catch {
-                if (active) setProducts([]);
+                if (active) {
+                    setProducts([]);
+                    setCategories([]);
+                }
             } finally {
                 if (active) setLoading(false);
             }
         }
 
-        loadProducts();
+        loadHomeData();
         return () => {
             active = false;
         };
     }, []);
 
-    const featuredProducts = products.filter((p) =>
-        isFeaturedFlag(p.is_featured)
+    const featuredProducts = useMemo(
+        () => products.filter((p) => isFeaturedFlag(p.is_featured)),
+        [products]
     );
-    const topProducts = (
-        featuredProducts.length > 0 ? featuredProducts : products
-    ).slice(0, 6);
+
+    const topProducts = useMemo(
+        () => (featuredProducts.length > 0 ? featuredProducts : products).slice(0, 6),
+        [featuredProducts, products]
+    );
+
+    const visibleCategories = useMemo(() => {
+        const valid = categories.filter((c) => Boolean(c.slug));
+        if (valid.length === 0) return [];
+
+        const matched = valid.filter((cat) =>
+            products.some((prod) => productBelongsToCategory(prod, cat))
+        );
+        const unmatched = valid.filter(
+            (cat) => !matched.some((m) => m.slug === cat.slug)
+        );
+
+        const combined = [
+            ...shuffleArray(matched),
+            ...shuffleArray(unmatched),
+        ];
+
+        const targetCount = Math.min(
+            combined.length,
+            Math.max(
+                Math.min(MIN_VISIBLE_CATEGORIES, combined.length),
+                MAX_VISIBLE_CATEGORIES
+            )
+        );
+
+        return combined.slice(0, targetCount);
+    }, [categories, products]);
+
+    const sliderCategory = visibleCategories[0] ?? null;
+    const gridCategories = visibleCategories.slice(1);
+    const firstGridCategory = gridCategories[0] ?? null;
+    const remainingGridCategories = gridCategories.slice(1);
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -234,48 +354,49 @@ export default function HomePage() {
 
             {/* ৪. ব্র্যান্ড সেকশন */}
             <BrandSection />
+            {/* ৫. ক্যাটাগরি স্লাইডার সেকশন (Reload-e rotate hobe) */}
+            {sliderCategory && (
+                <CategoryProductSliderSection
+                    key={sliderCategory.id}
+                    title={sliderCategory.name}
+                    subtitle="Slide Through Collection"
+                    categorySlug={sliderCategory.slug}
+                    products={products as never[]}
+                    viewAllLink={`/categories/${sliderCategory.slug}/products`}
+                />
+            )}
 
-            {/* ৫. ক্যাটাগরি সেকশন: Bath & Body Fragrance */}
-            <CategoryProductSection
-                title="Bath Body Fregrance"
-                subtitle="Explore Our Designer Body Oil Collection"
-                categorySlug="bath-body-fragrance"
-                products={products as never[]}
-                viewAllLink="/categories/bath-body-fragrance/products"
-            />
+            {/* ৬. প্রথম ডাইনামিক ক্যাটাগরি সেকশন */}
+            {firstGridCategory && (
+                <CategoryProductSection
+                    key={firstGridCategory.id}
+                    title={firstGridCategory.name}
+                    subtitle={`Explore Our ${firstGridCategory.name} Collection`}
+                    categorySlug={firstGridCategory.slug}
+                    products={products as never[]}
+                    viewAllLink={`/categories/${firstGridCategory.slug}/products`}
+                />
+            )}
 
             <CallToAction />
 
-            {/* ৬. অতিরিক্ত ক্যাটাগরি সেকশনসমূহ */}
-            <CategoryProductSection
-                title="Designer Body Oil"
-                subtitle="Explore Our Designer Body Oil Collection"
-                categorySlug="designer-body-oil"
-                products={products as never[]}
-                viewAllLink="/categories/designer-body-oil/products"
-            />
-
-            <CategoryProductSection
-                title="Fragrance On Sale"
-                subtitle="Premium Quality Cooking Essentials"
-                categorySlug="fragrance-on-sale"
-                products={products as never[]}
-                viewAllLink="/category/fragrance-on-sale/products"
-            />
-
-            <CategoryProductSection
-                title="Musk Amber & Oud"
-                subtitle="Fruity Fragrance"
-                categorySlug="musk-amber-oud"
-                products={products as never[]}
-                viewAllLink="/category/musk-amber-oud/products"
-            />
+            {/* ৭. বাকি ডাইনামিক ক্যাটাগরি সেকশনসমূহ */}
+            {remainingGridCategories.map((cat) => (
+                <CategoryProductSection
+                    key={cat.id}
+                    title={cat.name}
+                    subtitle={`Explore Our ${cat.name} Collection`}
+                    categorySlug={cat.slug}
+                    products={products as never[]}
+                    viewAllLink={`/categories/${cat.slug}/products`}
+                />
+            ))}
 
             <div className="-mx-4 w-[calc(100%+2rem)]">
                 <FullBgCTA />
             </div>
 
-            {/* ৭. বেস্ট সেলিং সেকশন */}
+            {/* ৮. বেস্ট সেলিং সেকশন */}
             <BestSellingProducts products={products as never[]} />
         </div>
     );

@@ -40,6 +40,7 @@ export const TopFooter = () => {
                 { name: "Payment", href: "/payment" },
                 { name: "Shipping", href: "/shipping" },
                 { name: "FAQ", href: "/faqs" },
+                { name: "Blogs", href: "/blog" },
             ],
         },
         {

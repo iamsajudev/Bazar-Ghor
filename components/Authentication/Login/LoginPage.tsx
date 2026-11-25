@@ -1,22 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { useAuthStore } from "@/store/useAuthStore";
 import Image from "next/image";
+
+interface PendingAutoLogin {
+    email?: string;
+    password?: string;
+}
 
 const FloatingBackground = () => {
     return (
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-            <div className="absolute w-8 h-8 rounded-lg bg-orange-500/20 dark:bg-orange-400/20 border border-orange-500/30" style={{ left: "10%", bottom: "-50px", animationDelay: "0s" }}></div>
-            <div className="absolute w-4 h-4 rounded-full bg-green-500/25 dark:bg-green-400/25" style={{ left: "20%", bottom: "-50px", animationDelay: "2s" }}></div>
-            <div className="absolute w-10 h-10 rounded-xl bg-orange-600/20 dark:bg-orange-500/20 border border-orange-600/30" style={{ left: "35%", bottom: "-50px", animationDelay: "1s" }}></div>
-            <div className="absolute w-3 h-3 rounded-full bg-orange-500/30 dark:bg-orange-400/30" style={{ left: "50%", bottom: "-50px", animationDelay: "4s" }}></div>
-            <div className="absolute w-6 h-6 rounded-md bg-green-600/20 dark:bg-green-500/20 border border-green-600/30" style={{ left: "65%", bottom: "-50px", animationDelay: "3s" }}></div>
-            <div className="absolute w-5 h-5 rounded-full bg-orange-400/25 dark:bg-orange-300/25" style={{ left: "80%", bottom: "-50px", animationDelay: "5s" }}></div>
-            <div className="absolute w-12 h-12 rounded-2xl bg-green-500/20 dark:bg-green-400/20 border border-green-500/30" style={{ left: "90%", bottom: "-50px", animationDelay: "1.5s" }}></div>
+            <div
+                className="absolute w-8 h-8 rounded-lg bg-orange-500/20 dark:bg-orange-400/20 border border-orange-500/30"
+                style={{ left: "10%", bottom: "-50px", animationDelay: "0s" }}
+            />
+            <div
+                className="absolute w-4 h-4 rounded-full bg-green-500/25 dark:bg-green-400/25"
+                style={{ left: "20%", bottom: "-50px", animationDelay: "2s" }}
+            />
+            <div
+                className="absolute w-10 h-10 rounded-xl bg-orange-600/20 dark:bg-orange-500/20 border border-orange-600/30"
+                style={{ left: "35%", bottom: "-50px", animationDelay: "1s" }}
+            />
+            <div
+                className="absolute w-3 h-3 rounded-full bg-orange-500/30 dark:bg-orange-400/30"
+                style={{ left: "50%", bottom: "-50px", animationDelay: "4s" }}
+            />
+            <div
+                className="absolute w-6 h-6 rounded-md bg-green-600/20 dark:bg-green-500/20 border border-green-600/30"
+                style={{ left: "65%", bottom: "-50px", animationDelay: "3s" }}
+            />
+            <div
+                className="absolute w-5 h-5 rounded-full bg-orange-400/25 dark:bg-orange-300/25"
+                style={{ left: "80%", bottom: "-50px", animationDelay: "5s" }}
+            />
+            <div
+                className="absolute w-12 h-12 rounded-2xl bg-green-500/20 dark:bg-green-400/20 border border-green-500/30"
+                style={{ left: "90%", bottom: "-50px", animationDelay: "1.5s" }}
+            />
         </div>
     );
 };
@@ -26,21 +52,62 @@ export default function LoginPage() {
     const searchParams = useSearchParams();
     const redirectTo = searchParams.get("redirect") ?? "/";
     const { login } = useAuthStore();
+
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [autoFilledNotice, setAutoFilledNotice] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const queryEmail = searchParams.get("email");
+        const queryPassword = searchParams.get("password");
+
+        if (queryEmail || queryPassword) {
+            if (queryEmail) setEmail(queryEmail);
+            if (queryPassword) setPassword(queryPassword);
+            setAutoFilledNotice(true);
+            return;
+        }
+
+        try {
+            const raw = sessionStorage.getItem("pending_auto_login");
+            if (!raw) return;
+
+            const parsed = JSON.parse(raw) as PendingAutoLogin;
+            if (parsed.email) setEmail(parsed.email);
+            if (parsed.password) setPassword(parsed.password);
+            if (parsed.email || parsed.password) {
+                setAutoFilledNotice(true);
+            }
+        } catch {
+            // Ignore malformed storage payload
+        }
+    }, [searchParams]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (loading) return;
+
         setLoading(true);
         setError("");
-        const result = await login(email, password);
+
+        const result = await login(email.trim(), password);
         setLoading(false);
+
         if (result.success) {
+            if (typeof window !== "undefined") {
+                try {
+                    sessionStorage.removeItem("pending_auto_login");
+                } catch {
+                    // Ignore storage error
+                }
+            }
             router.push(redirectTo);
-            router.refresh(); // সার্ভার কম্পোনেন্টগুলো যেন নতুন সেশন দেখে
+            router.refresh();
         } else {
             setError(result.message);
         }
@@ -75,9 +142,18 @@ export default function LoginPage() {
                     </p>
                 </div>
 
+                {autoFilledNotice && (
+                    <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/60 text-orange-700 dark:text-orange-300 text-xs font-semibold p-3.5 rounded-xl mb-5 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 shrink-0" />
+                        <span>
+                            Your order account credentials have been auto-filled. Click Sign In to continue.
+                        </span>
+                    </div>
+                )}
+
                 {error && (
                     <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs font-semibold p-3.5 rounded-xl mb-6 flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping"></span>
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
                         {error}
                     </div>
                 )}
@@ -106,7 +182,10 @@ export default function LoginPage() {
                             <label className="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
                                 Password
                             </label>
-                            <Link href="/forgot-password" className="text-xs font-semibold text-[#f76b1c] hover:underline">
+                            <Link
+                                href="/forgot-password"
+                                className="text-xs font-semibold text-[#f76b1c] hover:underline"
+                            >
                                 Forgot?
                             </Link>
                         </div>
@@ -123,10 +202,14 @@ export default function LoginPage() {
                             />
                             <button
                                 type="button"
-                                onClick={() => setShowPassword(!showPassword)}
+                                onClick={() => setShowPassword((prev) => !prev)}
                                 className="absolute right-3.5 top-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"
                             >
-                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                {showPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
                             </button>
                         </div>
                     </div>

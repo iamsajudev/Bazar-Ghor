@@ -10,25 +10,41 @@ export interface User {
     avatar?: string;
 }
 
+export interface AuthActionResult {
+    success: boolean;
+    message: string;
+}
+
 interface AuthStore {
     user: User | null;
     isAuthenticated: boolean;
     isHydrated: boolean;
-    login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
+    setUser: (user: User | null) => void;
+    login: (email: string, password: string) => Promise<AuthActionResult>;
     register: (
         name: string,
         email: string,
         password: string,
         passwordConfirmation?: string
-    ) => Promise<{ success: boolean; message: string }>;
+    ) => Promise<AuthActionResult>;
     logout: () => Promise<void>;
     validateSession: () => Promise<void>;
 }
 
+interface ApiErrorPayload {
+    message?: string;
+}
+
+interface AuthUserResponse {
+    data?: User | null;
+}
+
 async function readMessage(res: Response, fallback: string): Promise<string> {
     try {
-        const body = await res.json();
-        return body?.message ?? fallback;
+        const body = (await res.json()) as ApiErrorPayload;
+        return typeof body?.message === "string" && body.message.trim()
+            ? body.message
+            : fallback;
     } catch {
         return fallback;
     }
@@ -40,6 +56,13 @@ export const useAuthStore = create<AuthStore>()(
             user: null,
             isAuthenticated: false,
             isHydrated: false,
+
+            setUser: (user) =>
+                set({
+                    user,
+                    isAuthenticated: Boolean(user),
+                    isHydrated: true,
+                }),
 
             login: async (email, password) => {
                 try {
@@ -56,8 +79,15 @@ export const useAuthStore = create<AuthStore>()(
                         };
                     }
 
-                    const body = await res.json();
-                    set({ user: body.data ?? null, isAuthenticated: Boolean(body.data) });
+                    const body = (await res.json()) as AuthUserResponse;
+                    const nextUser = body?.data ?? null;
+
+                    set({
+                        user: nextUser,
+                        isAuthenticated: Boolean(nextUser),
+                        isHydrated: true,
+                    });
+
                     return { success: true, message: "Login successful!" };
                 } catch {
                     return { success: false, message: "Network error. Please try again." };
@@ -84,13 +114,20 @@ export const useAuthStore = create<AuthStore>()(
                         };
                     }
 
-                    const body = await res.json();
-                    if (body.data) {
-                        set({ user: body.data, isAuthenticated: true });
+                    const body = (await res.json()) as AuthUserResponse;
+                    if (body?.data) {
+                        set({
+                            user: body.data,
+                            isAuthenticated: true,
+                            isHydrated: true,
+                        });
                         return { success: true, message: "Registration successful!" };
                     }
-                    // অ্যাকাউন্ট তৈরি হয়েছে কিন্তু অটো-লগইন হয়নি
-                    return { success: true, message: body.message ?? "Account created! Please sign in." };
+
+                    return {
+                        success: true,
+                        message: await readMessage(res, "Account created! Please sign in."),
+                    };
                 } catch {
                     return { success: false, message: "Network error. Please try again." };
                 }
@@ -100,25 +137,43 @@ export const useAuthStore = create<AuthStore>()(
                 try {
                     await fetch("/api/auth/logout", { method: "POST" });
                 } finally {
-                    set({ user: null, isAuthenticated: false });
+                    set({
+                        user: null,
+                        isAuthenticated: false,
+                        isHydrated: true,
+                    });
                 }
             },
 
             validateSession: async () => {
                 if (typeof window === "undefined") return;
+
+                const controller = new AbortController();
+                const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+
                 try {
-                    const res = await fetch("/api/auth/me", { cache: "no-store" });
+                    const res = await fetch("/api/auth/me", {
+                        cache: "no-store",
+                        signal: controller.signal,
+                    });
+
                     if (res.ok) {
-                        const body = await res.json();
-                        set({ user: body.data ?? null, isAuthenticated: Boolean(body.data) });
+                        const body = (await res.json()) as AuthUserResponse;
+                        const nextUser = body?.data ?? null;
+                        set({
+                            user: nextUser,
+                            isAuthenticated: Boolean(nextUser),
+                        });
                     } else if (res.status === 401) {
-                        // শুধু সার্ভার নিশ্চিতভাবে reject করলেই logout
-                        set({ user: null, isAuthenticated: false });
+                        set({
+                            user: null,
+                            isAuthenticated: false,
+                        });
                     }
-                    // 404/502/নেটওয়ার্ক এরর → সেশন অক্ষত থাকে (আসল সুরক্ষা সার্ভার গার্ডে)
                 } catch {
-                    // ignore
+                    // Network/timeout/404/502 error-e existing persisted session intact thake
                 } finally {
+                    window.clearTimeout(timeoutId);
                     set({ isHydrated: true });
                 }
             },
@@ -126,9 +181,6 @@ export const useAuthStore = create<AuthStore>()(
         {
             name: "auth-storage",
             partialize: (state) => ({ user: state.user }),
-
-            // ⭐ মূল ফিক্স: rehydrate হওয়ার সাথে সাথেই isAuthenticated ঠিক করা
-            // (আগে এটা false থাকত → reload-এ /login-এ পাঠিয়ে দিত)
             merge: (persistedState, currentState) => {
                 const persisted = (persistedState ?? {}) as { user?: User | null };
                 return {
@@ -137,9 +189,8 @@ export const useAuthStore = create<AuthStore>()(
                     isAuthenticated: Boolean(persisted.user),
                 };
             },
-
             onRehydrateStorage: () => (state) => {
-                state?.validateSession();
+                void state?.validateSession();
             },
         }
     )

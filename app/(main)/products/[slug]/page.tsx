@@ -44,32 +44,31 @@ function resolveApiBase(): string {
     const raw =
         process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
         process.env.NEXT_PUBLIC_API_URL?.trim() ||
-        "https://ecommerce.flixzaglobal.us/api/v1";
+        "https://ecommerce.goflixza.com/api/v1";
     const clean = raw.replace(/\/+$/, "");
     return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
 }
 
+const API_BASE = resolveApiBase();
+
 async function getProduct(slug: string): Promise<ApiProductDetail | null> {
-    const baseUrl = resolveApiBase();
-    if (!baseUrl) return null;
+    const res = await fetch(`${API_BASE}/products/${encodeURIComponent(slug)}`, {
+        headers: {
+            Accept: "application/json",
+        },
+        cache: "no-store",
+    });
 
-    try {
-        const res = await fetch(`${baseUrl}/products/${encodeURIComponent(slug)}`, {
-            headers: { Accept: "application/json" },
-            cache: "no-store",
-        });
-
-        if (!res.ok) {
-            if (res.status === 404) return null;
-            throw new Error(`Failed to fetch product: ${res.status}`);
-        }
-
-        const json = await res.json();
-        return json.data ?? json;
-    } catch (error) {
-        console.error("Error fetching product:", error);
+    if (res.status === 404 || res.status === 403) {
         return null;
     }
+
+    if (!res.ok) {
+        throw new Error(`Failed to fetch product: ${res.status}`);
+    }
+
+    const data = await res.json();
+    return data?.data ?? data;
 }
 
 function ProductDetailsSkeleton() {

@@ -83,7 +83,7 @@ interface CategoryProductSectionProps {
     onAddToCart?: (product: CategoryProductItem, variant?: VariantRef) => void;
 }
 
-const DEFAULT_API_BASE = "https://ecommerce.flixzaglobal.us/api/v1";
+const DEFAULT_API_BASE = "https://ecommerce.goflixza.com/api/v1";
 
 function resolveApiBase(): string {
     const raw =

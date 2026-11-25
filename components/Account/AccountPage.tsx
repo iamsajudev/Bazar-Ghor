@@ -12,15 +12,50 @@ import { useWishlistStore } from "@/store/useWishlistStore";
 import { useCartStore } from "@/store/useCartStore";
 import { formatPrice } from "@/utils/format";
 
-// ডক: GET /orders → paginated orders; ফিল্ড নাম defensiveভাবে ম্যাপ করা
 interface ApiOrder {
-    id: number;
+    id: number | string;
     order_number?: string;
     status?: string;
     total_minor?: number;
     currency_code?: string;
     created_at?: string;
     items?: { name?: string; product_name?: string; quantity?: number }[];
+}
+
+interface OrdersApiResponse {
+    data?: ApiOrder[] | { data?: ApiOrder[] };
+    orders?: ApiOrder[];
+    meta?: { total?: number };
+}
+
+function extractOrdersList(payload: OrdersApiResponse | null | undefined): {
+    list: ApiOrder[];
+    total: number;
+} {
+    if (!payload) return { list: [], total: 0 };
+
+    if (Array.isArray(payload.data)) {
+        return {
+            list: payload.data,
+            total: payload.meta?.total ?? payload.data.length,
+        };
+    }
+
+    if (payload.data && !Array.isArray(payload.data) && Array.isArray(payload.data.data)) {
+        return {
+            list: payload.data.data,
+            total: payload.meta?.total ?? payload.data.data.length,
+        };
+    }
+
+    if (Array.isArray(payload.orders)) {
+        return {
+            list: payload.orders,
+            total: payload.meta?.total ?? payload.orders.length,
+        };
+    }
+
+    return { list: [], total: 0 };
 }
 
 export default function AccountPage() {
@@ -30,34 +65,36 @@ export default function AccountPage() {
     const { items: cartItems, toggleCart } = useCartStore();
     const [activeTab, setActiveTab] = useState("profile");
 
-    // ✅ আসল অর্ডার স্টেট
     const [orders, setOrders] = useState<ApiOrder[]>([]);
     const [ordersTotal, setOrdersTotal] = useState(0);
     const [ordersLoading, setOrdersLoading] = useState(true);
     const [ordersError, setOrdersError] = useState<string | null>(null);
 
-    // ক্লায়েন্ট-সাইড গার্ড (সার্ভার গার্ডও আছে — এটা বাড়তি)
     useEffect(() => {
         if (isHydrated && !isAuthenticated) {
             router.push("/login?redirect=/account");
         }
     }, [isHydrated, isAuthenticated, router]);
 
-    // ✅ অর্ডার ফেচ — লগইন থাকা অবস্থায়
     useEffect(() => {
         if (!isHydrated || !isAuthenticated) return;
         const controller = new AbortController();
 
+        setOrdersLoading(true);
+        setOrdersError(null);
+
         fetch("/api/orders", { signal: controller.signal, cache: "no-store" })
             .then(async (res) => {
                 if (!res.ok) throw new Error("Failed to load orders");
-                const body = await res.json();
-                setOrders(body.data ?? []);
-                setOrdersTotal(body.meta?.total ?? (body.data?.length ?? 0));
+                const body = (await res.json()) as OrdersApiResponse;
+                const { list, total } = extractOrdersList(body);
+                setOrders(list);
+                setOrdersTotal(total);
             })
-            .catch((err) => {
+            .catch((err: unknown) => {
                 if (!controller.signal.aborted) {
                     setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
+                    setOrders([]);
                 }
             })
             .finally(() => {
@@ -82,6 +119,7 @@ export default function AccountPage() {
     };
 
     const isVerified = Boolean(user.email_verified_at);
+    const safeOrders = Array.isArray(orders) ? orders : [];
 
     return (
         <div className="container mx-auto px-4 py-10">
@@ -202,7 +240,6 @@ export default function AccountPage() {
 
                 {/* Main Content */}
                 <main className="lg:col-span-8">
-                    {/* Profile Tab */}
                     {activeTab === "profile" && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -290,7 +327,6 @@ export default function AccountPage() {
                         </div>
                     )}
 
-                    {/* Orders Tab — ✅ এখন আসল API ডাটা */}
                     {activeTab === "orders" && (
                         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-xs">
                             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 border-b border-gray-100 dark:border-gray-800 pb-4">
@@ -303,18 +339,18 @@ export default function AccountPage() {
                                 </div>
                             ) : ordersError ? (
                                 <p className="text-sm text-red-500 text-center py-12">{ordersError}</p>
-                            ) : orders.length === 0 ? (
+                            ) : safeOrders.length === 0 ? (
                                 <div className="text-center py-12">
                                     <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                                     <p className="text-sm text-gray-500 font-medium">You haven&apos;t placed any orders yet.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {orders.map((order) => {
+                                    {safeOrders.map((order) => {
                                         const orderNo = order.order_number ?? `ORD-${order.id}`;
                                         const date = order.created_at?.slice(0, 10) ?? "";
                                         const status = order.status ?? "pending";
-                                        const itemNames = (order.items ?? [])
+                                        const itemNames = (Array.isArray(order.items) ? order.items : [])
                                             .map((it) => it.name ?? it.product_name ?? "")
                                             .filter(Boolean);
                                         const isDelivered = status.toLowerCase() === "delivered";
@@ -366,14 +402,12 @@ export default function AccountPage() {
                         </div>
                     )}
 
-                    {/* Settings Tab */}
                     {activeTab === "settings" && (
                         <div className="bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 shadow-xs">
                             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 border-b border-gray-100 dark:border-gray-800 pb-4">
                                 Account Settings
                             </h2>
                             <div className="space-y-3">
-                                {/* ডকে change-password / addresses endpoint নেই — আপাতত disabled */}
                                 <button
                                     disabled
                                     className="w-full flex items-center justify-between p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 opacity-60 cursor-not-allowed"

@@ -1,41 +1,73 @@
 "use client";
 
-import { useWishlistStore } from "@/store/useWishlistStore";
+import React, { useEffect, useState } from "react";
+import { useWishlistStore, type WishlistItem } from "@/store/useWishlistStore";
 import { useCartStore } from "@/store/useCartStore";
-import { Heart, ShoppingCart, Trash2, ArrowRight } from "lucide-react";
+import { useAuthStore } from "@/store/useAuthStore";
+import { Heart, ShoppingCart, Trash2, ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 
-interface WishlistItem {
-    id: number;
-    title: string;
-    price: number;
-    image: string;
-    slug?: string;
-    variantId?: number | null;
+function WishlistCardImage({ src, alt }: { src: string; alt: string }) {
+    const [imgSrc, setImgSrc] = useState(src || "/images/placeholder-category.png");
+
+    useEffect(() => {
+        setImgSrc(src || "/images/placeholder-category.png");
+    }, [src]);
+
+    return (
+        <Image
+            src={imgSrc}
+            alt={alt}
+            fill
+            onError={() => setImgSrc("/images/placeholder-category.png")}
+            className="object-contain p-3 group-hover:scale-105 transition-transform"
+        />
+    );
 }
 
 export function WishlistClient() {
-    const { items, removeItem } = useWishlistStore();
+    const { items, removeItem, syncWithServer, isHydrated } = useWishlistStore();
     const { addItem, toggleCart } = useCartStore();
+    const { isAuthenticated, isHydrated: authHydrated } = useAuthStore();
+    const [movingId, setMovingId] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (authHydrated && isAuthenticated) {
+            void syncWithServer();
+        }
+    }, [authHydrated, isAuthenticated, syncWithServer]);
 
     const handleMoveToCart = async (item: WishlistItem) => {
-        const safePrice =
-            typeof item.price === "number" && Number.isFinite(item.price)
-                ? item.price
-                : 0;
+        setMovingId(item.id);
+        try {
+            const safePrice =
+                typeof item.price === "number" && Number.isFinite(item.price)
+                    ? item.price
+                    : 0;
 
-        await addItem({
-            id: item.id,
-            title: item.title,
-            price: safePrice,
-            image: item.image,
-            variantId: item.variantId ?? item.id,
-            quantity: 1,
-        });
-        removeItem(item.id);
-        toggleCart();
+            await addItem({
+                id: item.id,
+                title: item.title,
+                price: safePrice,
+                image: item.image,
+                variantId: item.variantId ?? item.id,
+                quantity: 1,
+            });
+            await removeItem(item.id);
+            toggleCart();
+        } finally {
+            setMovingId(null);
+        }
     };
+
+    if (!isHydrated) {
+        return (
+            <div className="container mx-auto px-4 py-12 min-h-[60vh] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="container mx-auto px-4 py-12 min-h-[60vh]">
@@ -44,9 +76,7 @@ export function WishlistClient() {
                 <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white">
                     My Wishlist
                 </h1>
-                <span className="text-sm text-gray-500">
-                    ({items.length} items)
-                </span>
+                <span className="text-sm text-gray-500">({items.length} items)</span>
             </div>
 
             {items.length === 0 ? (
@@ -69,13 +99,13 @@ export function WishlistClient() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                    {(items as WishlistItem[]).map((item) => {
+                    {items.map((item) => {
                         const productHref = `/products/${item.slug || item.id}`;
                         const displayPrice =
-                            typeof item.price === "number" &&
-                            Number.isFinite(item.price)
+                            typeof item.price === "number" && Number.isFinite(item.price)
                                 ? item.price.toFixed(2)
                                 : "0.00";
+                        const isMoving = movingId === item.id;
 
                         return (
                             <div
@@ -86,12 +116,7 @@ export function WishlistClient() {
                                     href={productHref}
                                     className="block relative aspect-square overflow-hidden bg-gray-50 dark:bg-gray-800 rounded-lg mb-3"
                                 >
-                                    <Image
-                                        src={item.image}
-                                        alt={item.title}
-                                        fill
-                                        className="object-contain p-3 group-hover:scale-105 transition-transform"
-                                    />
+                                    <WishlistCardImage src={item.image} alt={item.title} />
                                 </Link>
 
                                 <Link
@@ -101,21 +126,26 @@ export function WishlistClient() {
                                     {item.title}
                                 </Link>
                                 <p className="text-lg font-bold text-[#f76b1c] mb-3">
-                                    ${displayPrice}
+                                    ৳ {displayPrice}
                                 </p>
 
                                 <div className="mt-auto flex gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => handleMoveToCart(item)}
-                                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                        disabled={isMoving}
+                                        onClick={() => void handleMoveToCart(item)}
+                                        className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                                     >
-                                        <ShoppingCart className="h-3.5 w-3.5" />
+                                        {isMoving ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        ) : (
+                                            <ShoppingCart className="h-3.5 w-3.5" />
+                                        )}
                                         Add to Cart
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => removeItem(item.id)}
+                                        onClick={() => void removeItem(item.id)}
                                         className="p-2 text-gray-400 hover:text-red-600 bg-gray-50 dark:bg-gray-800 rounded-lg transition-colors cursor-pointer"
                                         title="Remove"
                                     >

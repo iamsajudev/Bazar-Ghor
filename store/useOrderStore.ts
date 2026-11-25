@@ -1,7 +1,7 @@
 "use client";
 
+import { CustomerOrder } from "@/components/Account/Order/OrderCard";
 import { create } from "zustand";
-import type { CustomerOrder } from "@/components/Account/OrderCard";
 
 interface OrdersApiResponse {
     data?: CustomerOrder[] | { data?: CustomerOrder[] };

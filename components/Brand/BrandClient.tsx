@@ -49,7 +49,7 @@ interface ProductVariantData {
     thumbnail_url?: string | null;
 }
 
-interface ExtendedProduct extends Omit<ApiProduct, "in_stock"> {
+interface ExtendedProduct extends Omit<ApiProduct, "in_stock" | "currency_code"> {
     primary_image?: BrandImageObject | null;
     variants?: ProductVariantData[] | null;
     effective_price_minor?: number | null;

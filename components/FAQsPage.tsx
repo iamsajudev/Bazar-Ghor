@@ -82,8 +82,14 @@ function isFaqActive(item: ApiFaqItem): boolean {
 }
 
 function isFaqFeatured(item: ApiFaqItem): boolean {
-    const val = item.featured_faq ?? item.is_featured ?? item.featured;
-    return val === true || val === 1 || val === "1" || val === "true";
+    const val: unknown = item.featured_faq;
+    if (typeof val === "boolean") return val;
+    if (typeof val === "number") return val === 1;
+    if (typeof val === "string") {
+        const normalized = val.trim().toLowerCase();
+        return normalized === "1" || normalized === "true";
+    }
+    return false;
 }
 
 function resolveFaqCategoryMeta(item: ApiFaqItem): {

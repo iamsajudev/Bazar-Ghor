@@ -482,13 +482,13 @@ export function FeaturedTopSellingSection({
 
             {/* ✅ loading condition - এখানে কোনো টেক্সট বা স্পিনার নেই */}
             {loading ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                     {Array.from({ length: 4 }).map((_, index) => (
                         <TopSellingCardSkeleton key={index} />
                     ))}
                 </div>
             ) : displayList.length > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                     {displayList.map((product) => (
                         <TopSellingCard
                             key={product.id}

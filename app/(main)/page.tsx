@@ -68,7 +68,6 @@ export interface ApiProductItem {
 }
 
 const DEFAULT_API_BASE = "https://ecommerce.goflixza.com/api/v1";
-const MIN_VISIBLE_CATEGORIES = 3;
 const MAX_VISIBLE_CATEGORIES = 4;
 
 function getApiBaseUrl(): string {
@@ -86,6 +85,20 @@ function getProductsApiUrl(): string {
 
 function getCategoriesApiUrl(): string {
     return `${getApiBaseUrl()}/categories?per_page=30&page=1`;
+}
+
+function extractList<T>(payload: unknown): T[] {
+    if (!payload || typeof payload !== "object") return [];
+    const obj = payload as { data?: unknown };
+    if (Array.isArray(obj.data)) return obj.data as T[];
+    if (
+        obj.data &&
+        typeof obj.data === "object" &&
+        Array.isArray((obj.data as { data?: unknown }).data)
+    ) {
+        return (obj.data as { data: T[] }).data;
+    }
+    return [];
 }
 
 function isFeaturedFlag(val: unknown): boolean {
@@ -206,53 +219,57 @@ export default function HomePage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const controller = new AbortController();
         let active = true;
 
         async function loadHomeData() {
             setLoading(true);
             try {
-                const [prodRes, catRes] = await Promise.all([
-                    fetch(getProductsApiUrl(), { cache: "no-store" }),
-                    fetch(getCategoriesApiUrl(), { cache: "no-store" }),
+                const [prodResult, catResult] = await Promise.allSettled([
+                    fetch(getProductsApiUrl(), {
+                        cache: "no-store",
+                        headers: { Accept: "application/json" },
+                        signal: controller.signal,
+                    }),
+                    fetch(getCategoriesApiUrl(), {
+                        cache: "no-store",
+                        headers: { Accept: "application/json" },
+                        signal: controller.signal,
+                    }),
                 ]);
 
-                if (!active) return;
+                if (!active || controller.signal.aborted) return;
 
                 let loadedProducts: ApiProductItem[] = [];
-                if (prodRes.ok) {
-                    const prodJson = await prodRes.json();
-                    loadedProducts = Array.isArray(prodJson?.data)
-                        ? prodJson.data
-                        : Array.isArray(prodJson?.data?.data)
-                            ? prodJson.data.data
-                            : [];
+                if (prodResult.status === "fulfilled" && prodResult.value.ok) {
+                    const prodJson = await prodResult.value.json();
+                    loadedProducts = extractList<ApiProductItem>(prodJson);
                 }
 
                 let loadedCategories: ApiCategory[] = [];
-                if (catRes.ok) {
-                    const catJson = await catRes.json();
-                    loadedCategories = Array.isArray(catJson?.data)
-                        ? catJson.data
-                        : Array.isArray(catJson?.data?.data)
-                            ? catJson.data.data
-                            : [];
+                if (catResult.status === "fulfilled" && catResult.value.ok) {
+                    const catJson = await catResult.value.json();
+                    loadedCategories = extractList<ApiCategory>(catJson);
                 }
 
                 setProducts(loadedProducts);
                 setCategories(mergeCategories(loadedCategories, loadedProducts));
             } catch {
-                if (active) {
+                if (active && !controller.signal.aborted) {
                     setProducts([]);
                     setCategories([]);
                 }
             } finally {
-                if (active) setLoading(false);
+                if (active && !controller.signal.aborted) {
+                    setLoading(false);
+                }
             }
         }
 
         loadHomeData();
         return () => {
             active = false;
+            controller.abort();
         };
     }, []);
 
@@ -262,7 +279,11 @@ export default function HomePage() {
     );
 
     const topProducts = useMemo(
-        () => (featuredProducts.length > 0 ? featuredProducts : products).slice(0, 6),
+        () =>
+            (featuredProducts.length > 0 ? featuredProducts : products).slice(
+                0,
+                6
+            ),
         [featuredProducts, products]
     );
 
@@ -277,20 +298,8 @@ export default function HomePage() {
             (cat) => !matched.some((m) => m.slug === cat.slug)
         );
 
-        const combined = [
-            ...shuffleArray(matched),
-            ...shuffleArray(unmatched),
-        ];
-
-        const targetCount = Math.min(
-            combined.length,
-            Math.max(
-                Math.min(MIN_VISIBLE_CATEGORIES, combined.length),
-                MAX_VISIBLE_CATEGORIES
-            )
-        );
-
-        return combined.slice(0, targetCount);
+        const combined = [...shuffleArray(matched), ...shuffleArray(unmatched)];
+        return combined.slice(0, MAX_VISIBLE_CATEGORIES);
     }, [categories, products]);
 
     const sliderCategory = visibleCategories[0] ?? null;
@@ -331,13 +340,13 @@ export default function HomePage() {
                 </div>
 
                 {loading ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                         {Array.from({ length: 4 }).map((_, index) => (
                             <TopSellingCardSkeleton key={index} />
                         ))}
                     </div>
                 ) : topProducts.length > 0 ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                         {topProducts.map((product) => (
                             <TopSellingCard
                                 key={product.id}
@@ -354,6 +363,7 @@ export default function HomePage() {
 
             {/* ৪. ব্র্যান্ড সেকশন */}
             <BrandSection />
+
             {/* ৫. ক্যাটাগরি স্লাইডার সেকশন (Reload-e rotate hobe) */}
             {sliderCategory && (
                 <CategoryProductSliderSection

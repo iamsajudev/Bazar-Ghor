@@ -646,35 +646,69 @@ export function CategoryClient({ category }: CategoryClientProps) {
             </nav>
 
             {/* Header */}
-            <div className="mb-8 flex items-start gap-4">
-                {headerImageUrl && (
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex items-center justify-center shrink-0">
-                        <Image
-                            src={headerImageUrl}
-                            alt={decodeHtmlEntities(category.name)}
-                            width={80}
-                            height={80}
-                            className="w-full h-full object-cover"
+            <div className="relative mb-8 min-h-[190px] md:min-h-[240px] rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 p-7 md:p-10 flex items-center shadow-xs">
+                {category.banner_url && (
+                    <>
+                        <img
+                            src={category.banner_url}
+                            alt={`${decodeHtmlEntities(category.name)} banner`}
+                            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
                             onError={(e) => {
-                                if (e.currentTarget.parentElement) {
-                                    e.currentTarget.parentElement.style.display = "none";
-                                }
+                                e.currentTarget.style.display = "none";
                             }}
                         />
-                    </div>
+                        <div
+                            aria-hidden="true"
+                            className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-emerald-950/75 to-slate-900/65 pointer-events-none"
+                        />
+                    </>
                 )}
-                <div>
-                    <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-2">
-                        {decodeHtmlEntities(category.name)}
-                    </h1>
-                    {category.description && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 max-w-2xl">
-                            {decodeHtmlEntities(category.description)}
-                        </p>
+
+                <div className="relative z-10 w-full flex items-center gap-4 md:gap-5">
+                    {headerImageUrl && (
+                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl overflow-hidden bg-white/95 dark:bg-gray-800 border border-white/20 dark:border-gray-700 flex items-center justify-center shrink-0 shadow-sm">
+                            <Image
+                                src={headerImageUrl}
+                                alt={decodeHtmlEntities(category.name)}
+                                width={96}
+                                height={96}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                    if (e.currentTarget.parentElement) {
+                                        e.currentTarget.parentElement.style.display = "none";
+                                    }
+                                }}
+                            />
+                        </div>
                     )}
-                    <p className="text-sm text-gray-500">
-                        {isLoading ? "Loading..." : `${meta.total} products found`}
-                    </p>
+                    <div>
+                        <h1
+                            className={`text-3xl md:text-4xl font-extrabold mb-2 ${category.banner_url
+                                    ? "text-white"
+                                    : "text-gray-900 dark:text-white"
+                                }`}
+                        >
+                            {decodeHtmlEntities(category.name)}
+                        </h1>
+                        {category.description && (
+                            <p
+                                className={`text-sm mb-1.5 max-w-2xl leading-relaxed ${category.banner_url
+                                        ? "text-emerald-100/90"
+                                        : "text-gray-600 dark:text-gray-400"
+                                    }`}
+                            >
+                                {decodeHtmlEntities(category.description)}
+                            </p>
+                        )}
+                        <p
+                            className={`text-sm ${category.banner_url
+                                    ? "text-emerald-200/80"
+                                    : "text-gray-500"
+                                }`}
+                        >
+                            {isLoading ? "Loading..." : `${meta.total} products found`}
+                        </p>
+                    </div>
                 </div>
             </div>
 

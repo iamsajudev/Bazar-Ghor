@@ -8,6 +8,9 @@ import {
 } from "lucide-react";
 import { ABOUT_DATA } from "@/data/about";
 
+const BANNER_BG_IMAGE =
+    "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=1600&q=80";
+
 const iconMap: Record<string, React.ElementType> = {
     Leaf: Leaf,
     ShieldCheck: ShieldCheck,
@@ -21,10 +24,18 @@ const iconMap: Record<string, React.ElementType> = {
 export default function AboutClient() {
     return (
         <div className="min-h-screen bg-white dark:bg-gray-950">
-            {/* Hero Section */}
-            <section className="relative bg-gradient-to-br from-green-700 via-emerald-700 to-green-800 text-white py-20 md:py-32 overflow-hidden">
-                <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20" />
-                <div className="absolute bottom-0 left-0 w-96 h-96 bg-black/10 rounded-full blur-3xl -ml-20 -mb-20" />
+            {/* Hero Section with Background Image */}
+            <section className="relative bg-gradient-to-br from-green-900 via-emerald-900 to-slate-950 text-white py-20 md:py-32 overflow-hidden">
+                <Image
+                    src={BANNER_BG_IMAGE}
+                    alt="Bismillah Body Oils Banner"
+                    fill
+                    priority
+                    className="object-cover object-center opacity-35"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-emerald-950/75 to-green-900/60" />
+                <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-400/10 rounded-full blur-3xl -mr-20 -mt-20" />
+                <div className="absolute bottom-0 left-0 w-96 h-96 bg-black/20 rounded-full blur-3xl -ml-20 -mb-20" />
 
                 <div className="container mx-auto px-4 relative z-10">
                     <nav className="flex items-center gap-2 text-sm text-green-200 mb-6">
@@ -51,7 +62,7 @@ export default function AboutClient() {
                         <div className="relative aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl">
                             <Image
                                 src={ABOUT_DATA.story.image}
-                                alt="Our Story"
+                                alt="Bismillah Body Oils Story"
                                 fill
                                 className="object-cover"
                             />
@@ -67,10 +78,10 @@ export default function AboutClient() {
                                 {ABOUT_DATA.story.content}
                             </p>
                             <Link
-                                href="/products"
+                                href="/shop"
                                 className="inline-flex items-center gap-2 text-green-600 font-bold hover:gap-3 transition-all"
                             >
-                                Explore Our Products <ArrowRight className="h-4 w-4" />
+                                Explore Our Body Oils <ArrowRight className="h-4 w-4" />
                             </Link>
                         </div>
                     </div>
@@ -136,7 +147,7 @@ export default function AboutClient() {
                             Meet the Team
                         </span>
                         <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white mb-4">
-                            The People Behind BazarGhor
+                            The People Behind Bismillah Body Oils
                         </h2>
                     </div>
 
@@ -169,13 +180,13 @@ export default function AboutClient() {
             <section className="py-16 bg-gradient-to-r from-green-700 to-emerald-700">
                 <div className="container mx-auto px-4 text-center">
                     <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
-                        Ready to Experience Pure Organic Food?
+                        Ready to Experience Pure Body Oils?
                     </h2>
                     <p className="text-green-100 text-base md:text-lg mb-8 max-w-2xl mx-auto">
-                        Shop our collection of 100% organic products sourced directly from local farmers.
+                        Shop our collection of 100% pure, alcohol-free body oils and fragrance blends across the U.S.
                     </p>
                     <Link
-                        href="/products"
+                        href="/shop"
                         className="inline-flex items-center gap-2 bg-white text-green-800 px-8 py-4 rounded-xl font-bold hover:bg-green-50 transition-colors"
                     >
                         Shop Now <ArrowRight className="h-5 w-5" />

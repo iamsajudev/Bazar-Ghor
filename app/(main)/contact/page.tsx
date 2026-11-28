@@ -69,18 +69,22 @@ export default function ContactPage() {
 
     const bannerTagline =
         settings?.site_tagline ||
-        settings?.site_motto ||
         FALLBACK_SETTINGS.site_tagline;
 
     return (
         <main className="min-h-screen bg-gray-50/40 dark:bg-gray-950">
             {/* Top Hero Banner with Overlay Image */}
             <ContactBanner
-                siteName={settings?.website_name || FALLBACK_SETTINGS.website_name}
+                siteName={
+                    settings?.website_name ||
+                    FALLBACK_SETTINGS.website_name ||
+                    "Bismillah Body Oils"
+                }
                 tagline={bannerTagline}
                 bgImageUrl={
-                    settings?.branding?.site_logo_black ||
-                    settings?.branding?.site_logo_white ||
+                    settings?.branding?.logo_dark_url ||
+                    settings?.branding?.logo_light_url ||
+                    settings?.branding?.site_logo ||
                     undefined
                 }
             />

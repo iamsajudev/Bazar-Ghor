@@ -4,7 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Script from "next/script";
 import { buildApiUrl } from "@/lib/api-url";
-import type { TrackingApiResponse, TrackingConfigItem } from "./types";
+import { TrackingApiResponse, TrackingConfigItem } from "@/types/analytics";
 
 const CONSENT_STORAGE_KEY = "storefront_tracking_consent";
 

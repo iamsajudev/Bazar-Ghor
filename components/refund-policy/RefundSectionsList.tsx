@@ -1,7 +1,8 @@
 // components/refund-policy/RefundSectionsList.tsx
 "use client";
 
-import type { RefundSectionItem } from "./types";
+import { RefundSectionItem } from "@/types/refund-policy";
+
 
 interface RefundSectionsListProps {
   sections?: RefundSectionItem[];

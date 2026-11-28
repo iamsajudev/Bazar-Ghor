@@ -1,7 +1,8 @@
 // components/terms-conditions/TermsSectionsList.tsx
 "use client";
 
-import type { TermsSectionItem } from "./types";
+import { TermsSectionItem } from "@/types/terms-conditions";
+
 
 interface TermsSectionsListProps {
     sections?: TermsSectionItem[];

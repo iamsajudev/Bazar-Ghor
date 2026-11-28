@@ -18,10 +18,7 @@ import {
 } from "lucide-react";
 import { buildApiUrl } from "@/lib/api-url";
 import { formatPrice } from "@/utils/format";
-import type {
-  TrackOrderDetail,
-  TrackOrderStatusHistoryItem,
-} from "./types";
+import { TrackOrderDetail, TrackOrderStatusHistoryItem } from "@/types/track-order";
 
 const GUEST_TOKEN_STORAGE_KEYS = [
   "guest_cart_token",
